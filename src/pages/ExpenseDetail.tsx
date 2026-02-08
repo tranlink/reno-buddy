@@ -13,11 +13,13 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatEGP, CATEGORIES } from "@/lib/constants";
 import type { Tables } from "@/integrations/supabase/types";
-import { Pencil, Upload, X, Trash2 } from "lucide-react";
+import { Pencil, Upload, X, Trash2, History, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 type Expense = Tables<"expenses">;
 type Partner = Tables<"partners">;
+type AuditEntry = Tables<"audit_log">;
 
 export default function ExpenseDetail() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +31,7 @@ export default function ExpenseDetail() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
 
   // Edit form state
   const [date, setDate] = useState("");
@@ -47,7 +50,9 @@ export default function ExpenseDetail() {
     Promise.all([
       supabase.from("expenses").select("*").eq("id", id).maybeSingle(),
       supabase.from("partners").select("*").eq("project_id", activeProject.id),
-    ]).then(([expRes, partRes]) => {
+      supabase.from("audit_log").select("*").eq("entity_id", id).eq("entity_type", "expense").order("changed_at", { ascending: false }),
+    ]).then(([expRes, partRes, auditRes]) => {
+      setAuditLog(auditRes.data || []);
       const exp = expRes.data;
       setExpense(exp);
       setPartners(partRes.data || []);
@@ -168,6 +173,31 @@ export default function ExpenseDetail() {
                 </a>
               ))}
             </div>
+          )}
+          {auditLog.length > 0 && (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <History className="h-4 w-4" />
+                View edit history ({auditLog.length} changes)
+                <ChevronDown className="h-3 w-3" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2 space-y-2">
+                {auditLog.map((entry) => (
+                  <div key={entry.id} className="rounded-lg border p-2 text-xs space-y-1">
+                    <div>
+                      <span className="font-medium">{entry.field_changed}</span>
+                      {entry.old_value && <span className="text-muted-foreground"> {entry.old_value}</span>}
+                      <span className="text-muted-foreground"> → </span>
+                      <span>{entry.new_value || "—"}</span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {new Date(entry.changed_at).toLocaleString()}
+                      {entry.note && ` · ${entry.note}`}
+                    </div>
+                  </div>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
           )}
           <div className="flex gap-2 items-center">
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>← Back</Button>
