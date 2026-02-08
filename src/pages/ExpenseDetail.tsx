@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatEGP, CATEGORIES } from "@/lib/constants";
 import type { Tables } from "@/integrations/supabase/types";
-import { Pencil, Upload, X } from "lucide-react";
+import { Pencil, Upload, X, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 type Expense = Tables<"expenses">;
 type Partner = Tables<"partners">;
@@ -126,6 +127,22 @@ export default function ExpenseDetail() {
 
   const partner = partners.find((p) => p.id === expense.paid_by_partner_id);
 
+  const handleDelete = async () => {
+    if (!expense || !activeProject) return;
+    await supabase.from("audit_log").insert({
+      project_id: activeProject.id,
+      entity_type: "expense",
+      entity_id: expense.id,
+      field_changed: "deleted",
+      old_value: JSON.stringify({ amount: expense.amount_egp, date: expense.date, paid_by: partner?.name }),
+      new_value: null,
+    });
+    await supabase.from("import_message_hashes").delete().eq("expense_id", expense.id);
+    await supabase.from("expenses").delete().eq("id", expense.id);
+    toast({ title: "Expense deleted" });
+    navigate("/expenses");
+  };
+
   if (!editing) {
     return (
       <Card className="max-w-lg mx-auto">
@@ -152,7 +169,26 @@ export default function ExpenseDetail() {
               ))}
             </div>
           )}
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>← Back</Button>
+          <div className="flex gap-2 items-center">
+            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>← Back</Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm"><Trash2 className="mr-1 h-3 w-3" />Delete</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this expense?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete this expense (EGP {Number(expense.amount_egp)}) from {expense.date}. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardContent>
       </Card>
     );
