@@ -97,24 +97,33 @@ export default function Dashboard() {
             <p className="text-lg font-bold">{formatEGP(totalSpend)}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Receipt className="h-3.5 w-3.5" /> Expenses</div>
-            <p className="text-lg font-bold">{actualExpenses.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><FileWarning className="h-3.5 w-3.5" /> Missing Receipts</div>
-            <p className="text-lg font-bold">{missingReceipts}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><AlertTriangle className="h-3.5 w-3.5" /> Needs Review</div>
-            <p className="text-lg font-bold">{needsReviewCount}</p>
-          </CardContent>
-        </Card>
+        <Link to="/expenses">
+          <Card className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Receipt className="h-3.5 w-3.5" /> Expenses</div>
+              <p className="text-lg font-bold">{actualExpenses.length}</p>
+              <span className="text-xs text-primary font-medium">View all →</span>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/expenses?filter=missing-receipt">
+          <Card className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><FileWarning className="h-3.5 w-3.5" /> Missing Receipts</div>
+              <p className="text-lg font-bold">{missingReceipts}</p>
+              <span className="text-xs text-primary font-medium">View all →</span>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/expenses?filter=needs-review">
+          <Card className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><AlertTriangle className="h-3.5 w-3.5" /> Needs Review</div>
+              <p className="text-lg font-bold">{needsReviewCount}</p>
+              <span className="text-xs text-primary font-medium">View all →</span>
+            </CardContent>
+          </Card>
+        </Link>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Banknote className="h-3.5 w-3.5" /> Total Funded</div>
