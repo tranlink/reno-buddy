@@ -40,6 +40,7 @@ export default function ExpenseDetail() {
   const [category, setCategory] = useState("");
   const [notes, setNotes] = useState("");
   const [missingReceipt, setMissingReceipt] = useState(false);
+  const [needsReview, setNeedsReview] = useState(false);
   const [correctionNote, setCorrectionNote] = useState("");
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -63,6 +64,7 @@ export default function ExpenseDetail() {
         setCategory(exp.category || "");
         setNotes(exp.notes || "");
         setMissingReceipt(exp.missing_receipt);
+        setNeedsReview(exp.needs_review);
       }
       setLoading(false);
     });
@@ -105,6 +107,7 @@ export default function ExpenseDetail() {
     if (category !== (expense.category || "")) await logChange("category", expense.category, category || null);
     if (notes !== (expense.notes || "")) await logChange("notes", expense.notes, notes || null);
     if (missingReceipt !== expense.missing_receipt) await logChange("missing_receipt", String(expense.missing_receipt), String(missingReceipt));
+    if (needsReview !== expense.needs_review) await logChange("needs_review", String(expense.needs_review), String(needsReview));
 
     const { error } = await supabase.from("expenses").update({
       date,
@@ -113,6 +116,7 @@ export default function ExpenseDetail() {
       category: category === "__none__" ? null : category || null,
       notes: notes || null,
       missing_receipt: missingReceipt,
+      needs_review: needsReview,
       receipt_urls: updatedUrls,
     }).eq("id", expense.id);
 
@@ -156,7 +160,7 @@ export default function ExpenseDetail() {
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Pencil className="mr-1 h-3 w-3" />Edit</Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex justify-between"><span className="text-sm text-muted-foreground">Amount</span><span className="font-bold">{formatEGP(Number(expense.amount_egp))}</span></div>
+          <div className="flex justify-between items-center"><span className="text-sm text-muted-foreground">Amount</span><span className="flex items-center gap-2"><span className="font-bold">{formatEGP(Number(expense.amount_egp))}</span>{expense.needs_review && <Badge variant="outline" className="border-yellow-500 text-yellow-600">⚠ Needs Review</Badge>}</span></div>
           <div className="flex justify-between"><span className="text-sm text-muted-foreground">Date</span><span>{expense.date}</span></div>
           <div className="flex justify-between"><span className="text-sm text-muted-foreground">Paid By</span><span>{partner?.name || "Unknown"}</span></div>
           <div className="flex justify-between"><span className="text-sm text-muted-foreground">Category</span><span>{expense.category || "—"}</span></div>
@@ -251,6 +255,10 @@ export default function ExpenseDetail() {
         <div className="flex items-center gap-3">
           <Switch checked={missingReceipt} onCheckedChange={setMissingReceipt} id="missing-edit" />
           <Label htmlFor="missing-edit">Missing receipt</Label>
+        </div>
+        <div className="flex items-center gap-3">
+          <Switch checked={needsReview} onCheckedChange={setNeedsReview} id="needs-review-edit" />
+          <Label htmlFor="needs-review-edit">Needs review</Label>
         </div>
 
         {/* Existing receipts */}

@@ -27,6 +27,7 @@ export default function AddExpense() {
   const [category, setCategory] = useState("");
   const [notes, setNotes] = useState("");
   const [missingReceipt, setMissingReceipt] = useState(false);
+  const [needsReview, setNeedsReview] = useState(false);
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -75,6 +76,7 @@ export default function AddExpense() {
       notes: notes || null,
       receipt_urls: urls,
       missing_receipt: missingReceipt,
+      needs_review: needsReview,
       source: "manual",
     });
 
@@ -118,6 +120,11 @@ export default function AddExpense() {
           <div className="flex items-center gap-3">
             <Switch checked={missingReceipt} onCheckedChange={setMissingReceipt} id="missing" />
             <Label htmlFor="missing">Missing receipt</Label>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Switch checked={needsReview} onCheckedChange={setNeedsReview} id="needs-review" />
+            <Label htmlFor="needs-review">Needs review</Label>
           </div>
 
           {!missingReceipt && (
