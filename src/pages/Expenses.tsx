@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useProjects } from "@/hooks/useProjects";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search } from "lucide-react";
 import { formatEGP, CATEGORIES } from "@/lib/constants";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -19,6 +21,7 @@ export default function Expenses() {
   const [filterCategory, setFilterCategory] = useState("__all__");
   const [filterReview, setFilterReview] = useState("__all__");
   const [filterType, setFilterType] = useState("__all__");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,12 +49,33 @@ export default function Expenses() {
   if (filterCategory !== "__all__") filtered = filtered.filter((e) => e.category === filterCategory);
   if (filterReview === "review") filtered = filtered.filter((e) => (e as any).needs_review === true);
   if (filterReview === "reviewed") filtered = filtered.filter((e) => (e as any).needs_review !== true);
-  if (filterType === "expenses") filtered = filtered.filter((e) => !(e as any).is_fund_transfer);
-  if (filterType === "funds") filtered = filtered.filter((e) => (e as any).is_fund_transfer);
+  if (filterType === "expenses") filtered = filtered.filter((e) => !e.is_fund_transfer);
+  if (filterType === "funds") filtered = filtered.filter((e) => e.is_fund_transfer);
+
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    filtered = filtered.filter((e) => {
+      const partner = partners.find((p) => p.id === e.paid_by_partner_id);
+      const searchable = [e.notes, e.category, partner?.name, String(e.amount_egp)]
+        .filter(Boolean).join(" ").toLowerCase();
+      return searchable.includes(q);
+    });
+  }
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Expenses</h1>
+
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search expenses... / بحث..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 h-9"
+        />
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
