@@ -10,7 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
-import { Plus, UserMinus } from "lucide-react";
+import { Plus, UserMinus, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type Partner = Tables<"partners">;
 
@@ -32,6 +36,8 @@ export default function ProjectSettings() {
   // Partners
   const [partners, setPartners] = useState<Partner[]>([]);
   const [newPartnerName, setNewPartnerName] = useState("");
+  const [confirmName, setConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!activeProject || creating) return;
@@ -154,6 +160,56 @@ export default function ProjectSettings() {
       <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
         <Plus className="mr-1 h-4 w-4" /> Create Another Project
       </Button>
+
+      {projects.length > 1 && (
+        <Card className="border-destructive/50">
+          <CardHeader><CardTitle className="text-base text-destructive">Danger Zone</CardTitle></CardHeader>
+          <CardContent>
+            <AlertDialog onOpenChange={(open) => { if (!open) setConfirmName(""); }}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm"><Trash2 className="mr-1 h-4 w-4" /> Delete Project</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete "{activeProject.name}"?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete the project and all its data (expenses, partners, imports, receipts). Type <strong>{activeProject.name}</strong> to confirm.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <Input
+                  placeholder="Type project name to confirm"
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                />
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={confirmName !== activeProject.name || deleting}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      setDeleting(true);
+                      const { error } = await supabase.from("projects").delete().eq("id", activeProject.id);
+                      setDeleting(false);
+                      if (error) {
+                        toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+                        return;
+                      }
+                      toast({ title: "Project deleted" });
+                      const remaining = projects.filter((p) => p.id !== activeProject.id);
+                      if (remaining.length > 0) setActiveProjectId(remaining[0].id);
+                      await refetch();
+                      setConfirmName("");
+                    }}
+                  >
+                    {deleting ? "Deleting..." : "Delete Project"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
