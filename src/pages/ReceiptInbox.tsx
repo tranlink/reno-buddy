@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Inbox, Check, ImageIcon } from "lucide-react";
+import { Inbox, Check, ImageIcon, X } from "lucide-react";
 import { formatEGP } from "@/lib/constants";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -36,6 +36,12 @@ export default function ReceiptInbox() {
   };
 
   useEffect(() => { fetchData(); }, [activeProject]);
+
+  const handleDismiss = async (id: string) => {
+    await supabase.from("receipt_inbox").delete().eq("id", id);
+    toast({ title: "Receipt dismissed" });
+    fetchData();
+  };
 
   const handleAssign = async () => {
     if (!selectedImage || !selectedExpense) return;
@@ -92,10 +98,17 @@ export default function ReceiptInbox() {
                 <button
                   key={item.id}
                   onClick={() => setSelectedImage(item.id)}
-                  className={`relative rounded-lg overflow-hidden border-2 transition-colors ${
+                  className={`group relative rounded-lg overflow-hidden border-2 transition-colors ${
                     selectedImage === item.id ? "border-primary" : "border-transparent"
                   }`}
                 >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDismiss(item.id); }}
+                    className="absolute top-1 left-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    title="Dismiss (not a receipt)"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                   <img
                     src={item.storage_path}
                     alt={item.original_filename || "Receipt"}
@@ -116,6 +129,9 @@ export default function ReceiptInbox() {
                 <p className="col-span-2 text-sm text-muted-foreground text-center py-4">No unassigned receipts.</p>
               )}
             </CardContent>
+            <p className="text-xs text-muted-foreground px-6 pb-4">
+              Hover over a receipt and click × to dismiss non-receipt images.
+            </p>
           </Card>
 
           {/* Expenses missing receipts */}
