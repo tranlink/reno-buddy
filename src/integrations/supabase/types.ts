@@ -65,6 +65,7 @@ export type Database = {
           created_at: string
           date: string
           id: string
+          is_fund_transfer: boolean
           missing_receipt: boolean
           needs_review: boolean
           notes: string | null
@@ -81,6 +82,7 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          is_fund_transfer?: boolean
           missing_receipt?: boolean
           needs_review?: boolean
           notes?: string | null
@@ -97,6 +99,7 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          is_fund_transfer?: boolean
           missing_receipt?: boolean
           needs_review?: boolean
           notes?: string | null

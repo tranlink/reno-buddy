@@ -1,0 +1,1 @@
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS is_fund_transfer BOOLEAN NOT NULL DEFAULT false;

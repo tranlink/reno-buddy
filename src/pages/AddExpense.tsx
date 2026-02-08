@@ -28,6 +28,7 @@ export default function AddExpense() {
   const [notes, setNotes] = useState("");
   const [missingReceipt, setMissingReceipt] = useState(false);
   const [needsReview, setNeedsReview] = useState(false);
+  const [isFund, setIsFund] = useState(false);
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -49,7 +50,7 @@ export default function AddExpense() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeProject || !paidBy || !amount) { toast({ title: "Missing fields", variant: "destructive" }); return; }
-    if (!missingReceipt && receiptFiles.length === 0) {
+    if (!missingReceipt && !isFund && receiptFiles.length === 0) {
       toast({ title: "Receipt required", description: "Upload a receipt or toggle 'Missing receipt'.", variant: "destructive" });
       return;
     }
@@ -77,6 +78,7 @@ export default function AddExpense() {
       receipt_urls: urls,
       missing_receipt: missingReceipt,
       needs_review: needsReview,
+      is_fund_transfer: isFund,
       source: "manual",
     });
 
@@ -93,12 +95,19 @@ export default function AddExpense() {
       <CardHeader><CardTitle>Add Expense</CardTitle></CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-accent/50 border border-border">
+            <Switch checked={isFund} onCheckedChange={setIsFund} id="is-fund" />
+            <Label htmlFor="is-fund" className="text-sm">
+              This is a fund transfer (money sent to project, not an expense)
+            </Label>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
             <div><Label>Amount (EGP)</Label><Input type="number" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
           </div>
 
-          <div><Label>Paid By</Label>
+          <div><Label>{isFund ? "Sent By" : "Paid By"}</Label>
             <Select value={paidBy} onValueChange={setPaidBy}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{partners.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
