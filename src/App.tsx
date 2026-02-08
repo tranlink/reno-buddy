@@ -14,6 +14,9 @@ import AddExpense from "@/pages/AddExpense";
 import ProjectSettings from "@/pages/ProjectSettings";
 import WhatsAppGuide from "@/pages/WhatsAppGuide";
 import ExportCSV from "@/pages/ExportCSV";
+import ImportWizard from "@/pages/ImportWizard";
+import ReceiptInbox from "@/pages/ReceiptInbox";
+import ImportHistory from "@/pages/ImportHistory";
 import NotFound from "@/pages/NotFound";
 import { ReactNode } from "react";
 
@@ -40,6 +43,9 @@ const App = () => (
             <Route path="/expenses/:id" element={<ProtectedRoute><ExpenseDetail /></ProtectedRoute>} />
             <Route path="/add-expense" element={<ProtectedRoute><AddExpense /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><ProjectSettings /></ProtectedRoute>} />
+            <Route path="/import" element={<ProtectedRoute><ImportWizard /></ProtectedRoute>} />
+            <Route path="/receipt-inbox" element={<ProtectedRoute><ReceiptInbox /></ProtectedRoute>} />
+            <Route path="/import-history" element={<ProtectedRoute><ImportHistory /></ProtectedRoute>} />
             <Route path="/whatsapp-guide" element={<ProtectedRoute><WhatsAppGuide /></ProtectedRoute>} />
             <Route path="/export" element={<ProtectedRoute><ExportCSV /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

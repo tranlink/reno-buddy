@@ -5,12 +5,15 @@ import { useProjects } from "@/hooks/useProjects";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Building2, LayoutDashboard, Receipt, PlusCircle, Settings, MessageSquare, Download, Menu, LogOut, Plus } from "lucide-react";
+import { Building2, LayoutDashboard, Receipt, PlusCircle, Settings, MessageSquare, Download, Menu, LogOut, Plus, Upload, Inbox, History } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/expenses", label: "Expenses", icon: Receipt },
   { to: "/add-expense", label: "Add Expense", icon: PlusCircle },
+  { to: "/import", label: "Import (WhatsApp)", icon: Upload },
+  { to: "/receipt-inbox", label: "Receipt Inbox", icon: Inbox },
+  { to: "/import-history", label: "Import History", icon: History },
   { to: "/settings", label: "Project Settings", icon: Settings },
   { to: "/whatsapp-guide", label: "WhatsApp Guide", icon: MessageSquare },
   { to: "/export", label: "Export CSV", icon: Download },
