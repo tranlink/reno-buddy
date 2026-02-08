@@ -90,14 +90,34 @@ export default function Dashboard() {
         {activeProject.whatsapp_group_name && <p className="text-xs text-muted-foreground">WhatsApp: {activeProject.whatsapp_group_name}</p>}
       </div>
 
-      {/* Summary Tiles */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign className="h-3.5 w-3.5" /> Total Spend</div>
-            <p className="text-lg font-bold">{formatEGP(totalSpend)}</p>
-          </CardContent>
-        </Card>
+      {/* Project Spending Overview */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Project Spending Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign className="h-3.5 w-3.5" /> Total Project Cost</div>
+            <p className="text-2xl font-bold">{formatEGP(totalSpend + totalFunded)}</p>
+            <p className="text-xs text-muted-foreground">All money spent on the project</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 rounded-lg bg-accent/50">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Receipt className="h-3.5 w-3.5" /> Itemized Expenses</div>
+              <p className="text-lg font-bold">{formatEGP(totalSpend)}</p>
+              <p className="text-xs text-muted-foreground">With receipts &amp; categories</p>
+            </div>
+            <div className="p-3 rounded-lg bg-accent/50">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Banknote className="h-3.5 w-3.5" /> Unitemized Spending</div>
+              <p className="text-lg font-bold">{formatEGP(totalFunded)}</p>
+              <p className="text-xs text-muted-foreground">Spent but no items listed</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Operational Metrics */}
+      <div className="grid grid-cols-3 gap-3">
         <Link to="/expenses">
           <Card className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
             <CardContent className="p-4">
@@ -125,12 +145,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </Link>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Banknote className="h-3.5 w-3.5" /> Total Funded</div>
-            <p className="text-lg font-bold">{formatEGP(totalFunded)}</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Quick Actions */}
@@ -149,7 +163,7 @@ export default function Dashboard() {
               <TableRow>
                 <TableHead>Partner</TableHead>
                 <TableHead className="text-right">Expenses Paid</TableHead>
-                <TableHead className="text-right">Funds Sent</TableHead>
+                <TableHead className="text-right">Unitemized</TableHead>
                 <TableHead className="text-right">Total In</TableHead>
                 <TableHead className="text-right">Equal Share</TableHead>
                 <TableHead className="text-right">Balance</TableHead>
@@ -220,10 +234,13 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Fund Transfers */}
+      {/* Unitemized Fund Transfers */}
       {fundTransfers.length > 0 && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Fund Transfers</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Unitemized Fund Transfers</CardTitle>
+            <p className="text-xs text-muted-foreground">Money spent on the project without specific items attached. Consider adding expenses to account for these funds.</p>
+          </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
               {fundTransfers.map((ft) => {
