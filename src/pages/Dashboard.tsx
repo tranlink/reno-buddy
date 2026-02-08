@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatEGP } from "@/lib/constants";
-import { PlusCircle, Download, AlertTriangle, Receipt, Calendar, DollarSign, FileWarning, Upload } from "lucide-react";
+import { PlusCircle, Download, AlertTriangle, Receipt, Calendar, DollarSign, FileWarning, Upload, Banknote } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Expense = Tables<"expenses">;
@@ -37,27 +37,31 @@ export default function Dashboard() {
   if (!activeProject) return <p className="text-muted-foreground">No project selected.</p>;
   if (loading) return <p className="text-muted-foreground">Loading...</p>;
 
-  const totalSpend = expenses.reduce((s, e) => s + Number(e.amount_egp), 0);
-  const missingReceipts = expenses.filter((e) => e.missing_receipt).length;
-  const needsReviewCount = expenses.filter((e) => (e as any).needs_review).length;
-  const lastExpenseDate = expenses.length > 0 ? expenses[0].date : null;
+  const actualExpenses = expenses.filter(e => !(e as any).is_fund_transfer);
+  const fundTransfers = expenses.filter(e => (e as any).is_fund_transfer);
 
-  // Partner contributions
+  const totalSpend = actualExpenses.reduce((s, e) => s + Number(e.amount_egp), 0);
+  const totalFunded = fundTransfers.reduce((s, e) => s + Number(e.amount_egp), 0);
+  const missingReceipts = actualExpenses.filter((e) => e.missing_receipt).length;
+  const needsReviewCount = actualExpenses.filter((e) => (e as any).needs_review).length;
+  const lastExpenseDate = actualExpenses.length > 0 ? actualExpenses[0].date : null;
+
+  // Partner contributions (expenses only)
   const partnerStats = partners.map((p) => {
-    const pExpenses = expenses.filter((e) => e.paid_by_partner_id === p.id);
+    const pExpenses = actualExpenses.filter((e) => e.paid_by_partner_id === p.id);
     const total = pExpenses.reduce((s, e) => s + Number(e.amount_egp), 0);
     return { ...p, total, count: pExpenses.length, share: totalSpend > 0 ? (total / totalSpend) * 100 : 0 };
   });
 
-  // Category totals
+  // Category totals (expenses only)
   const catTotals: Record<string, number> = {};
-  expenses.forEach((e) => {
+  actualExpenses.forEach((e) => {
     const cat = e.category || "Uncategorized";
     catTotals[cat] = (catTotals[cat] || 0) + Number(e.amount_egp);
   });
 
-  const recent = expenses.slice(0, 10);
-  const sumCheck = expenses.reduce((s, e) => s + Number(e.amount_egp), 0);
+  const recent = actualExpenses.slice(0, 10);
+  const sumCheck = actualExpenses.reduce((s, e) => s + Number(e.amount_egp), 0);
   const integrityOk = Math.abs(sumCheck - totalSpend) < 0.01;
 
   return (
@@ -70,7 +74,7 @@ export default function Dashboard() {
       </div>
 
       {/* Summary Tiles */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><DollarSign className="h-3.5 w-3.5" /> Total Spend</div>
@@ -80,7 +84,7 @@ export default function Dashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Receipt className="h-3.5 w-3.5" /> Expenses</div>
-            <p className="text-lg font-bold">{expenses.length}</p>
+            <p className="text-lg font-bold">{actualExpenses.length}</p>
           </CardContent>
         </Card>
         <Card>
@@ -93,6 +97,12 @@ export default function Dashboard() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><AlertTriangle className="h-3.5 w-3.5" /> Needs Review</div>
             <p className="text-lg font-bold">{needsReviewCount}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Banknote className="h-3.5 w-3.5" /> Total Funded</div>
+            <p className="text-lg font-bold">{formatEGP(totalFunded)}</p>
           </CardContent>
         </Card>
       </div>
@@ -131,7 +141,29 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Category Totals */}
+      {/* Fund Transfers */}
+      {fundTransfers.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Fund Transfers</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {fundTransfers.map((ft) => {
+                const partner = partners.find((p) => p.id === ft.paid_by_partner_id);
+                return (
+                  <Link key={ft.id} to={`/expenses/${ft.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-accent/50 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium">{formatEGP(Number(ft.amount_egp))}</p>
+                      <p className="text-xs text-muted-foreground">{ft.date} · {partner?.name || "Unknown"}</p>
+                    </div>
+                    <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">💰 Fund</Badge>
+                  </Link>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {Object.keys(catTotals).length > 0 && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">By Category</CardTitle></CardHeader>

@@ -18,6 +18,7 @@ export default function Expenses() {
   const [filterPartner, setFilterPartner] = useState("__all__");
   const [filterCategory, setFilterCategory] = useState("__all__");
   const [filterReview, setFilterReview] = useState("__all__");
+  const [filterType, setFilterType] = useState("__all__");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +46,8 @@ export default function Expenses() {
   if (filterCategory !== "__all__") filtered = filtered.filter((e) => e.category === filterCategory);
   if (filterReview === "review") filtered = filtered.filter((e) => (e as any).needs_review === true);
   if (filterReview === "reviewed") filtered = filtered.filter((e) => (e as any).needs_review !== true);
+  if (filterType === "expenses") filtered = filtered.filter((e) => !(e as any).is_fund_transfer);
+  if (filterType === "funds") filtered = filtered.filter((e) => (e as any).is_fund_transfer);
 
   return (
     <div className="space-y-4">
@@ -81,6 +84,14 @@ export default function Expenses() {
             <SelectItem value="reviewed">Reviewed</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All types</SelectItem>
+            <SelectItem value="expenses">Expenses Only</SelectItem>
+            <SelectItem value="funds">Fund Transfers</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -90,13 +101,16 @@ export default function Expenses() {
           {filtered.map((exp) => {
             const partner = partners.find((p) => p.id === exp.paid_by_partner_id);
             return (
-              <Link key={exp.id} to={`/expenses/${exp.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-accent/50 transition-colors">
+              <Link key={exp.id} to={`/expenses/${exp.id}`} className={`flex items-center justify-between px-4 py-3 hover:bg-accent/50 transition-colors ${(exp as any).is_fund_transfer ? "bg-accent/30" : ""}`}>
                 <div>
                   <p className="text-sm font-medium">{formatEGP(Number(exp.amount_egp))}</p>
                   <p className="text-xs text-muted-foreground">{exp.date} · {partner?.name || "Unknown"}{exp.category ? ` · ${exp.category}` : ""}</p>
                   {exp.notes && <p className="text-xs text-muted-foreground truncate max-w-[200px]">{exp.notes}</p>}
                 </div>
                 <div className="flex items-center gap-2">
+                  {(exp as any).is_fund_transfer && (
+                    <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">💰 Fund</Badge>
+                  )}
                   {(exp as any).needs_review && (
                     <Badge variant="outline" className="text-yellow-600 border-yellow-600 text-xs">⚠ Review</Badge>
                   )}

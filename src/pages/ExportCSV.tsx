@@ -27,7 +27,7 @@ export default function ExportCSV() {
     const partners: Partner[] = partRes.data || [];
     const partnerMap = Object.fromEntries(partners.map((p) => [p.id, p.name]));
 
-    const header = "Date,Amount (EGP),Paid By,Category,Notes,Has Receipt,Source";
+    const header = "Date,Amount (EGP),Paid By,Category,Notes,Has Receipt,Source,Type";
     const rows = expenses.map((e) => {
       const cols = [
         e.date,
@@ -37,6 +37,7 @@ export default function ExportCSV() {
         `"${(e.notes || "").replace(/"/g, '""')}"`,
         e.missing_receipt ? "No" : "Yes",
         (e as any).source || "manual",
+        (e as any).is_fund_transfer ? "Fund Transfer" : "Expense",
       ];
       return cols.join(",");
     });
@@ -64,7 +65,7 @@ export default function ExportCSV() {
           Export all expenses for <strong>{activeProject.name}</strong> as a CSV file.
         </p>
         <p className="text-xs text-muted-foreground">
-          Columns: Date, Amount (EGP), Paid By, Category, Notes, Has Receipt, Source
+          Columns: Date, Amount (EGP), Paid By, Category, Notes, Has Receipt, Source, Type
         </p>
         <Button onClick={handleExport} disabled={exporting}>
           <Download className="mr-2 h-4 w-4" />
