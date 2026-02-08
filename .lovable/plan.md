@@ -1,43 +1,51 @@
 
 
-## Add Dark Mode Toggle
+## Clarify Fund Transfers as "Unitemized Spending"
+
+### Understanding the problem
+
+Fund transfers represent money that **was already spent** on the project, but unlike regular expenses, they are not tied to specific items (no category, no receipt, no description of what was purchased). The current dashboard doesn't make this distinction clear -- it just shows "Total Funded" separately, which is confusing.
 
 ### What will change
 
-**1. Create a ThemeProvider wrapper** (`src/components/ThemeProvider.tsx`)
-- Wrap the app with `next-themes`'s `ThemeProvider` so the `.dark` class gets applied to `<html>`
-- Set default theme to "system" and storage key to "reno-theme"
+**Update `src/pages/Dashboard.tsx`:**
 
-**2. Update `src/App.tsx`**
-- Wrap the app content with the new `ThemeProvider`
+1. **Rename "Total Funded" to "Unitemized Spending"** -- money that was spent but without detailed line items attached
 
-**3. Add a theme toggle button in the header** (`src/components/AppLayout.tsx`)
-- Add a Sun/Moon icon button next to the project selector in the header
-- Clicking it cycles between light and dark mode
-- Uses `useTheme()` from `next-themes`
+2. **Add a new "Total Project Cost" metric** that combines both:
+   - Total Project Cost = Itemized Expenses + Unitemized Spending
+   - This gives the full picture of how much has been spent overall
 
-### Why this works out of the box
-- Dark mode CSS variables are already fully defined in `src/index.css` (the `.dark` class block)
-- `next-themes` is already installed as a dependency
-- All UI components already use CSS variables (`hsl(var(--background))`, etc.), so they will adapt automatically
+3. **Restructure the summary tiles** into a clear hierarchy:
+
+```text
++---------------------------------------------------------------+
+|  Project Spending Overview                                     |
+|                                                                |
+|  Total Project Cost        EGP X,XXX                          |
+|  (all money spent on the project)                              |
+|                                                                |
+|  Itemized Expenses    EGP X,XXX   (with receipts/categories)  |
+|  Unitemized Funds     EGP X,XXX   (spent but no items listed) |
++---------------------------------------------------------------+
+
+[ Expenses: N ]  [ Missing Receipts: N ]  [ Needs Review: N ]
+```
+
+4. **Update the Fund Transfers section title** to "Unitemized Fund Transfers" with a subtitle: "Money spent on the project without specific items attached. Consider adding expenses to account for these funds."
+
+5. **Update Partner Contributions table**: Rename "Funds Sent" column to "Unitemized" for clarity
 
 ### Technical details
 
-**ThemeProvider.tsx:**
-```tsx
-import { ThemeProvider as NextThemesProvider } from "next-themes";
+**File: `src/pages/Dashboard.tsx`**
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <NextThemesProvider attribute="class" defaultTheme="system" enableSystem>
-      {children}
-    </NextThemesProvider>
-  );
-}
-```
+- Compute `totalProjectCost = totalSpend + totalFunded`
+- Replace the current 5-tile grid with:
+  - A "Project Spending Overview" card showing total cost broken down into itemized vs unitemized
+  - A 3-tile row for Expenses count, Missing Receipts, Needs Review
+- Rename labels and add descriptive subtitles throughout
+- Update the Fund Transfers card heading and description
 
-**AppLayout.tsx header addition:**
-- Import `Moon`, `Sun` from `lucide-react`
-- Import `useTheme` from `next-themes`
-- Add a button that toggles between light/dark before the project selector
+No new files or dependencies needed. Only `src/pages/Dashboard.tsx` is modified.
 
