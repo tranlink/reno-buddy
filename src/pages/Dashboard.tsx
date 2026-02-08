@@ -37,20 +37,34 @@ export default function Dashboard() {
   if (!activeProject) return <p className="text-muted-foreground">No project selected.</p>;
   if (loading) return <p className="text-muted-foreground">Loading...</p>;
 
-  const actualExpenses = expenses.filter(e => !(e as any).is_fund_transfer);
-  const fundTransfers = expenses.filter(e => (e as any).is_fund_transfer);
+  const actualExpenses = expenses.filter(e => !e.is_fund_transfer);
+  const fundTransfers = expenses.filter(e => e.is_fund_transfer);
 
   const totalSpend = actualExpenses.reduce((s, e) => s + Number(e.amount_egp), 0);
   const totalFunded = fundTransfers.reduce((s, e) => s + Number(e.amount_egp), 0);
   const missingReceipts = actualExpenses.filter((e) => e.missing_receipt).length;
-  const needsReviewCount = actualExpenses.filter((e) => (e as any).needs_review).length;
+  const needsReviewCount = actualExpenses.filter((e) => e.needs_review).length;
   const lastExpenseDate = actualExpenses.length > 0 ? actualExpenses[0].date : null;
 
   // Partner contributions (expenses only)
   const partnerStats = partners.map((p) => {
     const pExpenses = actualExpenses.filter((e) => e.paid_by_partner_id === p.id);
-    const total = pExpenses.reduce((s, e) => s + Number(e.amount_egp), 0);
-    return { ...p, total, count: pExpenses.length, share: totalSpend > 0 ? (total / totalSpend) * 100 : 0 };
+    const expensesPaid = pExpenses.reduce((s, e) => s + Number(e.amount_egp), 0);
+    const pFunds = fundTransfers.filter((e) => e.paid_by_partner_id === p.id);
+    const fundsSent = pFunds.reduce((s, e) => s + Number(e.amount_egp), 0);
+    const totalContribution = expensesPaid + fundsSent;
+    const equalShare = totalSpend / Math.max(partners.length, 1);
+    const balance = totalContribution - equalShare;
+    return {
+      ...p,
+      expensesPaid,
+      fundsSent,
+      totalContribution,
+      equalShare,
+      balance,
+      count: pExpenses.length,
+      share: totalSpend > 0 ? (totalContribution / totalSpend) * 100 : 0,
+    };
   });
 
   // Category totals (expenses only)
@@ -122,22 +136,32 @@ export default function Dashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Partner</TableHead>
-                <TableHead className="text-right">Paid</TableHead>
-                <TableHead className="text-right">Share</TableHead>
-                <TableHead className="text-right">#</TableHead>
+                <TableHead className="text-right">Expenses Paid</TableHead>
+                <TableHead className="text-right">Funds Sent</TableHead>
+                <TableHead className="text-right">Total In</TableHead>
+                <TableHead className="text-right">Equal Share</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {partnerStats.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell className="text-right">{formatEGP(p.total)}</TableCell>
-                  <TableCell className="text-right">{p.share.toFixed(1)}%</TableCell>
-                  <TableCell className="text-right">{p.count}</TableCell>
+                  <TableCell className="text-right">{formatEGP(p.expensesPaid)}</TableCell>
+                  <TableCell className="text-right">{p.fundsSent > 0 ? formatEGP(p.fundsSent) : "—"}</TableCell>
+                  <TableCell className="text-right font-medium">{formatEGP(p.totalContribution)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">{formatEGP(p.equalShare)}</TableCell>
+                  <TableCell className={`text-right font-bold ${p.balance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {p.balance >= 0 ? "+" : ""}{formatEGP(p.balance)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <p className="text-xs text-muted-foreground px-4 pb-3">
+            Equal share = Total expenses ÷ {partners.length} partners.
+            Green = overpaid (owed money back). Red = underpaid (owes money).
+          </p>
         </CardContent>
       </Card>
 
