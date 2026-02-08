@@ -115,6 +115,96 @@ export type Database = {
           },
         ]
       }
+      import_message_hashes: {
+        Row: {
+          created_at: string
+          expense_id: string | null
+          id: string
+          import_run_id: string | null
+          message_hash: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          expense_id?: string | null
+          id?: string
+          import_run_id?: string | null
+          message_hash: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          expense_id?: string | null
+          id?: string
+          import_run_id?: string | null
+          message_hash?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_message_hashes_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_message_hashes_import_run_id_fkey"
+            columns: ["import_run_id"]
+            isOneToOne: false
+            referencedRelation: "import_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_message_hashes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_runs: {
+        Row: {
+          created_at: string
+          expenses_imported: number | null
+          filename: string | null
+          id: string
+          project_id: string
+          receipts_matched: number | null
+          receipts_unmatched: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expenses_imported?: number | null
+          filename?: string | null
+          id?: string
+          project_id: string
+          receipts_matched?: number | null
+          receipts_unmatched?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expenses_imported?: number | null
+          filename?: string | null
+          id?: string
+          project_id?: string
+          receipts_matched?: number | null
+          receipts_unmatched?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partners: {
         Row: {
           active: boolean
@@ -173,6 +263,103 @@ export type Database = {
           whatsapp_group_name?: string | null
         }
         Relationships: []
+      }
+      receipt_inbox: {
+        Row: {
+          assigned_expense_id: string | null
+          created_at: string
+          id: string
+          import_run_id: string | null
+          original_filename: string | null
+          project_id: string
+          storage_path: string
+          timestamp: string | null
+          whatsapp_sender: string | null
+        }
+        Insert: {
+          assigned_expense_id?: string | null
+          created_at?: string
+          id?: string
+          import_run_id?: string | null
+          original_filename?: string | null
+          project_id: string
+          storage_path: string
+          timestamp?: string | null
+          whatsapp_sender?: string | null
+        }
+        Update: {
+          assigned_expense_id?: string | null
+          created_at?: string
+          id?: string
+          import_run_id?: string | null
+          original_filename?: string | null
+          project_id?: string
+          storage_path?: string
+          timestamp?: string | null
+          whatsapp_sender?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipt_inbox_assigned_expense_id_fkey"
+            columns: ["assigned_expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_inbox_import_run_id_fkey"
+            columns: ["import_run_id"]
+            isOneToOne: false
+            referencedRelation: "import_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_inbox_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sender_mappings: {
+        Row: {
+          id: string
+          ignored: boolean | null
+          partner_id: string | null
+          project_id: string
+          whatsapp_name: string
+        }
+        Insert: {
+          id?: string
+          ignored?: boolean | null
+          partner_id?: string | null
+          project_id: string
+          whatsapp_name: string
+        }
+        Update: {
+          id?: string
+          ignored?: boolean | null
+          partner_id?: string | null
+          project_id?: string
+          whatsapp_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sender_mappings_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sender_mappings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
