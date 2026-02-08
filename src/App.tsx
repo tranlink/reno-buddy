@@ -18,6 +18,7 @@ import ImportWizard from "@/pages/ImportWizard";
 import ReceiptInbox from "@/pages/ReceiptInbox";
 import ImportHistory from "@/pages/ImportHistory";
 import NotFound from "@/pages/NotFound";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { ReactNode } from "react";
 
 const queryClient = new QueryClient();
@@ -30,30 +31,32 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
-            <Route path="/expenses/:id" element={<ProtectedRoute><ExpenseDetail /></ProtectedRoute>} />
-            <Route path="/add-expense" element={<ProtectedRoute><AddExpense /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><ProjectSettings /></ProtectedRoute>} />
-            <Route path="/import" element={<ProtectedRoute><ImportWizard /></ProtectedRoute>} />
-            <Route path="/receipt-inbox" element={<ProtectedRoute><ReceiptInbox /></ProtectedRoute>} />
-            <Route path="/import-history" element={<ProtectedRoute><ImportHistory /></ProtectedRoute>} />
-            <Route path="/whatsapp-guide" element={<ProtectedRoute><WhatsAppGuide /></ProtectedRoute>} />
-            <Route path="/export" element={<ProtectedRoute><ExportCSV /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
+              <Route path="/expenses/:id" element={<ProtectedRoute><ExpenseDetail /></ProtectedRoute>} />
+              <Route path="/add-expense" element={<ProtectedRoute><AddExpense /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><ProjectSettings /></ProtectedRoute>} />
+              <Route path="/import" element={<ProtectedRoute><ImportWizard /></ProtectedRoute>} />
+              <Route path="/receipt-inbox" element={<ProtectedRoute><ReceiptInbox /></ProtectedRoute>} />
+              <Route path="/import-history" element={<ProtectedRoute><ImportHistory /></ProtectedRoute>} />
+              <Route path="/whatsapp-guide" element={<ProtectedRoute><WhatsAppGuide /></ProtectedRoute>} />
+              <Route path="/export" element={<ProtectedRoute><ExportCSV /></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

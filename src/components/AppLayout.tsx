@@ -5,7 +5,8 @@ import { useProjects } from "@/hooks/useProjects";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Building2, LayoutDashboard, Receipt, PlusCircle, Settings, MessageSquare, Download, Menu, LogOut, Plus, Upload, Inbox, History } from "lucide-react";
+import { Building2, LayoutDashboard, Receipt, PlusCircle, Settings, MessageSquare, Download, Menu, LogOut, Plus, Upload, Inbox, History, Sun, Moon } from "lucide-react";
+import { useTheme } from "next-themes";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -24,6 +25,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { projects, activeProject, setActiveProjectId } = useProjects();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const handleProjectChange = (val: string) => {
     if (val === "__new__") {
@@ -78,6 +80,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Link>
 
           <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="h-9 w-9"
+            >
+              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <span className="sr-only">Toggle theme</span>
+            </Button>
             <Select value={activeProject?.id || ""} onValueChange={handleProjectChange}>
               <SelectTrigger className="w-[180px] h-9 text-xs">
                 <SelectValue placeholder="Select project" />
