@@ -1,19 +1,17 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { parseChat, detectExpenses, matchReceiptsToExpenses } from "@/lib/whatsappParser";
-import type { ParsedMessage, MediaEvent, ExpenseCandidate } from "@/lib/whatsappParser";
-import type { ReceiptMatch } from "@/lib/whatsappParser";
+import { parseChat } from "@/lib/whatsappParser";
+import type { ParsedMessage } from "@/lib/whatsappParser";
 import type { Tables } from "@/integrations/supabase/types";
 import UploadStep from "@/components/import/UploadStep";
 import SenderMappingStep from "@/components/import/SenderMappingStep";
-import PreviewStep, { type PreviewRow } from "@/components/import/PreviewStep";
+import PreviewStep, { type MessageRow } from "@/components/import/PreviewStep";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect } from "react";
 
 type Partner = Tables<"partners">;
 
@@ -23,17 +21,14 @@ export default function ImportWizard() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
-  const [chatText, setChatText] = useState("");
   const [mediaFiles, setMediaFiles] = useState<Map<string, File>>(new Map());
   const [messages, setMessages] = useState<ParsedMessage[]>([]);
-  const [mediaEvents, setMediaEvents] = useState<MediaEvent[]>([]);
   const [senders, setSenders] = useState<string[]>([]);
-  const [candidates, setCandidates] = useState<ExpenseCandidate[]>([]);
-  const [receiptMatches, setReceiptMatches] = useState<Map<number, ReceiptMatch | null>>(new Map());
-  const [duplicateHashes, setDuplicateHashes] = useState<Set<string>>(new Set());
   const [senderMapping, setSenderMapping] = useState<Map<string, { partnerId: string | null; ignored: boolean }>>(new Map());
   const [existingMappings, setExistingMappings] = useState<Map<string, { partnerId: string | null; ignored: boolean }>>(new Map());
   const [partners, setPartners] = useState<Partner[]>([]);
+  const [previewRows, setPreviewRows] = useState<MessageRow[]>([]);
+  const [duplicateHashes, setDuplicateHashes] = useState<Set<string>>(new Set());
   const [importResult, setImportResult] = useState<{ expenses: number; receipts: number; inbox: number } | null>(null);
 
   // Load partners and existing sender mappings
@@ -54,12 +49,10 @@ export default function ImportWizard() {
 
   // Step 1 complete
   const handleUploadComplete = useCallback((text: string, files: Map<string, File>) => {
-    setChatText(text);
     setMediaFiles(files);
-    const { messages: msgs, mediaEvents: events } = parseChat(text);
-    setMessages(msgs);
-    setMediaEvents(events);
-    const uniqueSenders = [...new Set(msgs.map((m) => m.sender))];
+    const parsed = parseChat(text);
+    setMessages(parsed);
+    const uniqueSenders = [...new Set(parsed.map((m) => m.sender))];
     setSenders(uniqueSenders);
     setStep(2);
   }, []);
@@ -76,48 +69,58 @@ export default function ImportWizard() {
       partner_id: val.partnerId,
       ignored: val.ignored,
     }));
-
     for (const u of upserts) {
       await supabase.from("sender_mappings").upsert(u, { onConflict: "project_id,whatsapp_name" });
     }
 
-    // Detect expenses (only from non-ignored senders)
+    // Build preview rows from non-ignored senders
+    const getPartnerName = (id: string | null) => partners.find((p) => p.id === id)?.name || "—";
+
     const filtered = messages.filter((m) => {
       const map = mapping.get(m.sender);
       return map && !map.ignored && map.partnerId;
     });
-    const detected = detectExpenses(filtered);
-    setCandidates(detected);
+
+    const rows: MessageRow[] = filtered.map((m, idx) => {
+      const map = mapping.get(m.sender)!;
+      return {
+        id: idx,
+        date: m.date,
+        time: m.time,
+        sender: m.sender,
+        partnerName: getPartnerName(map.partnerId),
+        partnerId: map.partnerId!,
+        text: m.text,
+        hasMedia: m.hasMedia,
+        mediaFilename: m.mediaFilename,
+        selected: false,
+        amount: "",
+        category: "",
+        hash: m.hash,
+      };
+    });
 
     // Check duplicates
-    const hashes = detected.map((c) => c.message.hash);
-    const { data: existing } = await supabase
-      .from("import_message_hashes")
-      .select("message_hash")
-      .eq("project_id", activeProject.id)
-      .in("message_hash", hashes);
-    const dupes = new Set((existing || []).map((e) => e.message_hash));
-    setDuplicateHashes(dupes);
+    const hashes = rows.map((r) => r.hash);
+    if (hashes.length > 0) {
+      const { data: existing } = await supabase
+        .from("import_message_hashes")
+        .select("message_hash")
+        .eq("project_id", activeProject.id)
+        .in("message_hash", hashes);
+      setDuplicateHashes(new Set((existing || []).map((e) => e.message_hash)));
+    } else {
+      setDuplicateHashes(new Set());
+    }
 
-    // Match receipts
-    const senderToPartnerName = new Map<string, string>();
-    mapping.forEach((val, sender) => {
-      if (val.partnerId) {
-        const p = partners.find((pp) => pp.id === val.partnerId);
-        if (p) senderToPartnerName.set(sender, p.name);
-      }
-    });
-    const matches = matchReceiptsToExpenses(detected, mediaEvents, mediaFiles, senderToPartnerName);
-    setReceiptMatches(matches);
-
+    setPreviewRows(rows);
     setStep(3);
-  }, [activeProject, messages, mediaEvents, mediaFiles, partners]);
+  }, [activeProject, messages, partners]);
 
   // Step 3: Import
-  const handleImport = useCallback(async (rows: PreviewRow[]) => {
+  const handleImport = useCallback(async (selectedRows: MessageRow[]) => {
     if (!activeProject) return;
 
-    // Create import run
     const { data: run, error: runErr } = await supabase
       .from("import_runs")
       .insert({
@@ -133,95 +136,73 @@ export default function ImportWizard() {
       return;
     }
 
-    let receiptsMatched = 0;
-    let receiptsUnmatched = 0;
+    let receiptsLinked = 0;
 
-    for (const row of rows) {
-      const receiptUrls: string[] = [];
-      let missingReceipt = true;
+    for (const row of selectedRows) {
+      const amountEgp = parseFloat(row.amount) || 0;
 
-      // Upload receipt if matched
-      if (row.receiptMatch) {
-        const file = mediaFiles.get(row.receiptMatch.mediaFilename);
-        if (file) {
-          const path = `${activeProject.id}/${crypto.randomUUID()}-${file.name}`;
-          const { error: upErr } = await supabase.storage.from("receipts").upload(path, file);
-          if (!upErr) {
-            const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(path);
-            receiptUrls.push(urlData.publicUrl);
-            missingReceipt = false;
-            receiptsMatched++;
-          }
-        }
-      } else {
-        receiptsUnmatched++;
-      }
-
-      // Insert expense
       const { data: expense } = await supabase.from("expenses").insert({
         project_id: activeProject.id,
-        date: row.candidate.message.timestamp.toISOString().split("T")[0],
-        amount_egp: row.amountEgp,
-        paid_by_partner_id: row.mappedPartnerId!,
+        date: row.date,
+        amount_egp: amountEgp,
+        paid_by_partner_id: row.partnerId,
         category: row.category || null,
-        notes: row.candidate.message.notes || row.candidate.message.text,
-        receipt_urls: receiptUrls,
-        missing_receipt: missingReceipt,
+        notes: row.text,
+        receipt_urls: [],
+        missing_receipt: !row.hasMedia,
+        needs_review: true,
+        is_fund_transfer: false,
         source: "whatsapp_import",
-        needs_review: row.candidate.needsReview,
-        receipt_confidence: row.receiptMatch?.confidence || null,
       }).select().single();
 
-      // Store hash
       if (expense) {
         await supabase.from("import_message_hashes").insert({
           project_id: activeProject.id,
-          message_hash: row.candidate.message.hash,
+          message_hash: row.hash,
           expense_id: expense.id,
           import_run_id: run.id,
         });
+        if (row.hasMedia) receiptsLinked++;
       }
     }
 
-    // Send unmatched media to receipt inbox
-    const usedMedia = new Set(rows.filter((r) => r.receiptMatch).map((r) => r.receiptMatch!.mediaFilename));
-    const unmatchedMedia = Array.from(mediaFiles.entries()).filter(
-      ([fn]) => !usedMedia.has(fn) && /\.(jpg|jpeg|png|webp)$/i.test(fn)
+    // Send ALL media files from ZIP to receipt inbox
+    const imageFiles = Array.from(mediaFiles.entries()).filter(
+      ([fn]) => /\.(jpg|jpeg|png|webp)$/i.test(fn)
     );
 
-    for (const [fn, file] of unmatchedMedia) {
+    for (const [fn, file] of imageFiles) {
       const path = `${activeProject.id}/inbox/${crypto.randomUUID()}-${fn}`;
       const { error: upErr } = await supabase.storage.from("receipts").upload(path, file);
       if (!upErr) {
         const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(path);
-        // Find related media event for timestamp/sender
-        const relatedEvent = mediaEvents.find((e) => e.attachedFilename === fn);
+        // Find the message that referenced this file for metadata
+        const relatedMsg = messages.find((m) => m.mediaFilename === fn);
         await supabase.from("receipt_inbox").insert({
           project_id: activeProject.id,
           import_run_id: run.id,
           storage_path: urlData.publicUrl,
           original_filename: fn,
-          whatsapp_sender: relatedEvent?.sender || null,
-          timestamp: relatedEvent?.timestamp?.toISOString() || null,
+          whatsapp_sender: relatedMsg?.sender || null,
+          timestamp: relatedMsg ? `${relatedMsg.date}T${relatedMsg.time}` : null,
         });
       }
     }
 
-    // Update import run stats
     await supabase.from("import_runs").update({
-      expenses_imported: rows.length,
-      receipts_matched: receiptsMatched,
-      receipts_unmatched: receiptsUnmatched + unmatchedMedia.length,
+      expenses_imported: selectedRows.length,
+      receipts_matched: 0,
+      receipts_unmatched: imageFiles.length,
     }).eq("id", run.id);
 
     setImportResult({
-      expenses: rows.length,
-      receipts: receiptsMatched,
-      inbox: unmatchedMedia.length,
+      expenses: selectedRows.length,
+      receipts: receiptsLinked,
+      inbox: imageFiles.length,
     });
     setStep(4);
-    toast({ title: "Import complete", description: `${rows.length} expenses imported.` });
-  }, [activeProject, mediaFiles, mediaEvents, toast]);
+    toast({ title: "Import complete", description: `${selectedRows.length} expenses imported.` });
+  }, [activeProject, mediaFiles, messages, toast]);
 
   if (!activeProject) return <p className="text-muted-foreground p-4">Select a project first.</p>;
 
@@ -251,11 +232,9 @@ export default function ImportWizard() {
       )}
       {step === 3 && (
         <PreviewStep
-          candidates={candidates}
-          receiptMatches={receiptMatches}
+          rows={previewRows}
+          onRowsChange={setPreviewRows}
           duplicateHashes={duplicateHashes}
-          senderToPartner={senderMapping}
-          partners={partners}
           onImport={handleImport}
           onBack={() => setStep(2)}
         />
@@ -269,9 +248,8 @@ export default function ImportWizard() {
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm">{importResult.expenses} expenses imported</p>
-            <p className="text-sm">{importResult.receipts} receipts auto-linked</p>
             {importResult.inbox > 0 && (
-              <p className="text-sm">{importResult.inbox} unmatched receipts sent to inbox</p>
+              <p className="text-sm">{importResult.inbox} photos sent to receipt inbox for manual assignment</p>
             )}
             <div className="flex gap-2 pt-4">
               <Button variant="outline" onClick={() => navigate("/receipt-inbox")}>
