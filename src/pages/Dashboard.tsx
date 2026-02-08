@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatEGP } from "@/lib/constants";
 import { PlusCircle, Download, AlertTriangle, Receipt, Calendar, DollarSign, FileWarning, Upload, Banknote, PieChart } from "lucide-react";
+import SettlementSummary from "@/components/dashboard/SettlementSummary";
 import type { Tables } from "@/integrations/supabase/types";
 
 const PARTNER_COLORS = ["bg-blue-500", "bg-green-500", "bg-amber-500", "bg-purple-500", "bg-rose-500", "bg-cyan-500"];
@@ -175,6 +176,9 @@ export default function Dashboard() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Settlement Summary */}
+      <SettlementSummary partnerStats={partnerStats} />
 
       {/* Project Ownership */}
       {totalSpend > 0 ? (
