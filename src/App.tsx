@@ -17,6 +17,7 @@ import ExportCSV from "@/pages/ExportCSV";
 import ImportWizard from "@/pages/ImportWizard";
 import ReceiptInbox from "@/pages/ReceiptInbox";
 import ImportHistory from "@/pages/ImportHistory";
+import Users from "@/pages/Users";
 import NotFound from "@/pages/NotFound";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ReactNode } from "react";
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/import-history" element={<ProtectedRoute><ImportHistory /></ProtectedRoute>} />
               <Route path="/whatsapp-guide" element={<ProtectedRoute><WhatsAppGuide /></ProtectedRoute>} />
               <Route path="/export" element={<ProtectedRoute><ExportCSV /></ProtectedRoute>} />
+              <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
