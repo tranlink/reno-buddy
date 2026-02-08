@@ -99,11 +99,30 @@ export default function PreviewStep({
         </CardDescription>
       </CardHeader>
       <CardContent>
+        <div className="flex flex-wrap gap-3 text-sm py-2 mb-2">
+          <span>{rows.filter(r => r.included).length} of {rows.length} selected</span>
+          <span className="text-yellow-600">
+            {rows.filter(r => r.candidate.needsReview && !r.isDuplicate).length} need review
+          </span>
+          <span className="text-muted-foreground">
+            {rows.filter(r => r.isDuplicate).length} duplicates
+          </span>
+          <span className="font-medium">
+            Total: {formatEGP(rows.filter(r => r.included).reduce((s, r) => s + r.amountEgp, 0))}
+          </span>
+        </div>
         <div className="overflow-auto max-h-[60vh]">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10"></TableHead>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={rows.filter(r => !r.isDuplicate).every(r => r.included)}
+                    onCheckedChange={(checked) => {
+                      setRows(prev => prev.map(r => r.isDuplicate ? r : { ...r, included: !!checked }));
+                    }}
+                  />
+                </TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Sender</TableHead>
                 <TableHead>Partner</TableHead>
@@ -150,7 +169,7 @@ export default function PreviewStep({
                     </Select>
                   </TableCell>
                   <TableCell>{receiptBadge(row.receiptMatch, row.isDuplicate)}</TableCell>
-                  <TableCell className="max-w-[200px] text-xs truncate" title={row.candidate.message.text}>
+                  <TableCell className={`max-w-[200px] text-xs truncate ${row.candidate.isTotalLine ? "opacity-40" : ""}`} title={row.candidate.message.text}>
                     {row.candidate.message.text.slice(0, 80)}
                     {row.candidate.needsReview && <Badge variant="outline" className="ml-1 text-warning border-warning">Review</Badge>}
                     {row.candidate.isTotalLine && <Badge variant="outline" className="ml-1">Total</Badge>}
