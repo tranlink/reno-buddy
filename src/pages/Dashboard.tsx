@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatEGP } from "@/lib/constants";
-import { PlusCircle, Download, AlertTriangle, Receipt, Calendar, DollarSign, FileWarning, Upload, Banknote } from "lucide-react";
+import { PlusCircle, Download, AlertTriangle, Receipt, Calendar, DollarSign, FileWarning, Upload, Banknote, PieChart } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+
+const PARTNER_COLORS = ["bg-blue-500", "bg-green-500", "bg-amber-500", "bg-purple-500", "bg-rose-500", "bg-cyan-500"];
 
 type Expense = Tables<"expenses">;
 type Partner = Tables<"partners">;
@@ -164,6 +166,46 @@ export default function Dashboard() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Project Ownership */}
+      {totalSpend > 0 ? (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><PieChart className="h-4 w-4" /> Project Ownership</CardTitle></CardHeader>
+          <CardContent>
+            {/* Stacked bar */}
+            <div className="flex h-6 rounded-full overflow-hidden mb-4">
+              {[...partnerStats].sort((a, b) => b.share - a.share).map((p, i) => (
+                <div
+                  key={p.id}
+                  className={`${PARTNER_COLORS[i % PARTNER_COLORS.length]} transition-all`}
+                  style={{ width: `${p.share}%` }}
+                  title={`${p.name}: ${p.share.toFixed(1)}%`}
+                />
+              ))}
+            </div>
+            {/* Per-partner rows */}
+            <div className="space-y-3">
+              {[...partnerStats].sort((a, b) => b.share - a.share).map((p, i) => (
+                <div key={p.id} className="flex items-center gap-3">
+                  <span className="text-sm font-medium w-28 truncate">{p.name}</span>
+                  <div className="flex-1 h-3 rounded-full bg-secondary overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${PARTNER_COLORS[i % PARTNER_COLORS.length]} transition-all`}
+                      style={{ width: `${p.share}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-bold w-16 text-right">{p.share.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><PieChart className="h-4 w-4" /> Project Ownership</CardTitle></CardHeader>
+          <CardContent><p className="text-sm text-muted-foreground">No expenses yet</p></CardContent>
+        </Card>
+      )}
 
       {/* Fund Transfers */}
       {fundTransfers.length > 0 && (
