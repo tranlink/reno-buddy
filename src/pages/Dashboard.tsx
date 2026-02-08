@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatEGP } from "@/lib/constants";
-import { PlusCircle, Download, AlertTriangle, Receipt, Calendar, DollarSign, FileWarning } from "lucide-react";
+import { PlusCircle, Download, AlertTriangle, Receipt, Calendar, DollarSign, FileWarning, Upload } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Expense = Tables<"expenses">;
@@ -100,6 +100,7 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-2">
         <Button asChild size="sm"><Link to="/add-expense"><PlusCircle className="mr-1 h-4 w-4" />Add Expense</Link></Button>
+        <Button asChild size="sm" variant="outline"><Link to="/import"><Upload className="mr-1 h-4 w-4" />Import WhatsApp</Link></Button>
         <Button asChild size="sm" variant="outline"><Link to="/export"><Download className="mr-1 h-4 w-4" />Export CSV</Link></Button>
       </div>
 
