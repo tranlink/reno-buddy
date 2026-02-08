@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Inbox, Check, ImageIcon, X } from "lucide-react";
+import { Inbox, Check, ImageIcon, X, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { formatEGP } from "@/lib/constants";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -40,6 +41,17 @@ export default function ReceiptInbox() {
   const handleDismiss = async (id: string) => {
     await supabase.from("receipt_inbox").delete().eq("id", id);
     toast({ title: "Receipt dismissed" });
+    fetchData();
+  };
+
+  const handleClearAll = async () => {
+    if (!activeProject) return;
+    const ids = inboxItems.map(i => i.id);
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      await supabase.from("receipt_inbox").delete().eq("id", id);
+    }
+    toast({ title: "Receipt inbox cleared", description: `${ids.length} unassigned receipts removed.` });
     fetchData();
   };
 
@@ -89,9 +101,34 @@ export default function ReceiptInbox() {
         <div className="grid md:grid-cols-2 gap-4">
           {/* Unassigned receipts */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Unassigned Receipts ({inboxItems.length})</CardTitle>
-              <CardDescription>Click to select, then assign to an expense.</CardDescription>
+            <CardHeader className="flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Unassigned Receipts ({inboxItems.length})</CardTitle>
+                <CardDescription>Click to select, then assign to an expense.</CardDescription>
+              </div>
+              {inboxItems.length > 0 && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-destructive border-destructive hover:bg-destructive/10">
+                      <Trash2 className="mr-1 h-3 w-3" /> Clear All ({inboxItems.length})
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Clear all unassigned receipts?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently remove {inboxItems.length} unassigned receipt images from the inbox. Receipts already assigned to expenses are not affected.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleClearAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Clear All
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-auto">
               {inboxItems.map((item) => (
