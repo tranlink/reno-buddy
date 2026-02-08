@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, FileCheck, Camera, ChevronLeft, ChevronRight } from "lucide-react";
 import { CATEGORIES, formatEGP } from "@/lib/constants";
@@ -22,6 +23,8 @@ export interface MessageRow {
   selected: boolean;
   amount: string;
   category: string;
+  isFund: boolean;
+  needsReview: boolean;
 }
 
 interface PreviewStepProps {
@@ -31,7 +34,7 @@ interface PreviewStepProps {
   onBack: () => void;
 }
 
-type FilterTab = "all" | "photos" | "numbers";
+type FilterTab = "all" | "photos" | "numbers" | "funds";
 const HAS_DIGIT = /[\d٠-٩]/;
 const PAGE_SIZE = 50;
 
@@ -41,7 +44,6 @@ export default function PreviewStep({ rows, onRowsChange, onImport, onBack }: Pr
   const [page, setPage] = useState(0);
   const isMobile = useIsMobile();
 
-  // Filtered indices across all pages
   const filteredIndices = useMemo(() => {
     return rows
       .map((_, i) => i)
@@ -49,47 +51,38 @@ export default function PreviewStep({ rows, onRowsChange, onImport, onBack }: Pr
         const r = rows[i];
         if (filter === "photos") return r.hasMedia;
         if (filter === "numbers") return HAS_DIGIT.test(r.displayText);
+        if (filter === "funds") return r.isFund;
         return true;
       });
   }, [rows, filter]);
 
-  // Pagination
   const totalPages = Math.max(1, Math.ceil(filteredIndices.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
   const pageIndices = filteredIndices.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
-  // Reset page when filter changes
   const handleFilterChange = (v: string) => {
     setFilter(v as FilterTab);
     setPage(0);
   };
 
-  const toggleRow = (idx: number) => {
+  const updateRow = (idx: number, patch: Partial<MessageRow>) => {
     const next = [...rows];
-    next[idx] = { ...next[idx], selected: !next[idx].selected };
+    next[idx] = { ...next[idx], ...patch };
     onRowsChange(next);
   };
 
-  const updateAmount = (idx: number, val: string) => {
-    const next = [...rows];
-    next[idx] = { ...next[idx], amount: val };
-    onRowsChange(next);
-  };
+  const toggleRow = (idx: number) => updateRow(idx, { selected: !rows[idx].selected });
+  const updateAmount = (idx: number, val: string) => updateRow(idx, { amount: val });
+  const updateCategory = (idx: number, val: string) => updateRow(idx, { category: val === "__none__" ? "" : val });
+  const toggleFund = (idx: number) => updateRow(idx, { isFund: !rows[idx].isFund });
+  const toggleReview = (idx: number) => updateRow(idx, { needsReview: !rows[idx].needsReview });
 
-  const updateCategory = (idx: number, val: string) => {
-    const next = [...rows];
-    next[idx] = { ...next[idx], category: val === "__none__" ? "" : val };
-    onRowsChange(next);
-  };
-
-  // Select all on current page
   const toggleAllVisible = (checked: boolean) => {
     const visibleSet = new Set(pageIndices);
     const next = rows.map((r, i) => visibleSet.has(i) ? { ...r, selected: checked } : r);
     onRowsChange(next);
   };
 
-  // Select all filtered (across all pages)
   const selectAllFiltered = () => {
     if (filteredIndices.length > 100 && !confirm(`Select all ${filteredIndices.length} filtered messages?`)) return;
     const filteredSet = new Set(filteredIndices);
@@ -102,12 +95,33 @@ export default function PreviewStep({ rows, onRowsChange, onImport, onBack }: Pr
   const selectedTotal = selectedRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
   const missingAmounts = selectedRows.filter((r) => !r.amount || parseFloat(r.amount) <= 0).length;
   const allPageSelected = pageIndices.length > 0 && pageIndices.every((i) => rows[i].selected);
+  const fundCount = selectedRows.filter((r) => r.isFund).length;
 
   const handleImport = async () => {
     setImporting(true);
     await onImport(selectedRows);
     setImporting(false);
   };
+
+  const FundBadge = ({ on, onClick }: { on: boolean; onClick: () => void }) => (
+    <Badge
+      variant={on ? "default" : "outline"}
+      className={`cursor-pointer text-[10px] px-1.5 py-0.5 ${on ? "bg-blue-600 hover:bg-blue-700 text-white" : "hover:bg-blue-50"}`}
+      onClick={onClick}
+    >
+      💰 Fund
+    </Badge>
+  );
+
+  const ReviewBadge = ({ on, onClick }: { on: boolean; onClick: () => void }) => (
+    <Badge
+      variant={on ? "default" : "outline"}
+      className={`cursor-pointer text-[10px] px-1.5 py-0.5 ${on ? "bg-yellow-500 hover:bg-yellow-600 text-white" : "hover:bg-yellow-50"}`}
+      onClick={onClick}
+    >
+      ⚠ Review
+    </Badge>
+  );
 
   const PaginationControls = () => (
     totalPages > 1 ? (
@@ -130,13 +144,17 @@ export default function PreviewStep({ rows, onRowsChange, onImport, onBack }: Pr
           <TabsTrigger value="all" className={isMobile ? "flex-1" : ""}>All</TabsTrigger>
           <TabsTrigger value="photos" className={isMobile ? "flex-1" : ""}>📷 Photos</TabsTrigger>
           <TabsTrigger value="numbers" className={isMobile ? "flex-1" : ""}>🔢 Numbers</TabsTrigger>
+          <TabsTrigger value="funds" className={isMobile ? "flex-1" : ""}>💰 Funds</TabsTrigger>
         </TabsList>
       </Tabs>
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span>{filteredIndices.length} messages</span>
         {selectedCount > 0 && (
-          <span className="font-medium text-foreground">{selectedCount} selected · {formatEGP(selectedTotal)}</span>
+          <span className="font-medium text-foreground">
+            {selectedCount} selected · {formatEGP(selectedTotal)}
+            {fundCount > 0 && ` · ${fundCount} fund transfers`}
+          </span>
         )}
       </div>
 
@@ -202,6 +220,10 @@ export default function PreviewStep({ rows, onRowsChange, onImport, onBack }: Pr
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="flex gap-2">
+                    <FundBadge on={row.isFund} onClick={() => toggleFund(idx)} />
+                    <ReviewBadge on={row.needsReview} onClick={() => toggleReview(idx)} />
+                  </div>
                 </div>
               );
             })}
@@ -244,6 +266,8 @@ export default function PreviewStep({ rows, onRowsChange, onImport, onBack }: Pr
                 <TableHead className="w-10">📷</TableHead>
                 <TableHead>Amount (EGP)</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead className="w-20">💰 Fund</TableHead>
+                <TableHead className="w-20">⚠ Review</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -283,6 +307,12 @@ export default function PreviewStep({ rows, onRowsChange, onImport, onBack }: Pr
                           ))}
                         </SelectContent>
                       </Select>
+                    </TableCell>
+                    <TableCell>
+                      <FundBadge on={row.isFund} onClick={() => toggleFund(idx)} />
+                    </TableCell>
+                    <TableCell>
+                      <ReviewBadge on={row.needsReview} onClick={() => toggleReview(idx)} />
                     </TableCell>
                   </TableRow>
                 );

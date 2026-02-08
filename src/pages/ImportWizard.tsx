@@ -27,7 +27,7 @@ export default function ImportWizard() {
   const [existingMappings, setExistingMappings] = useState<Map<string, { partnerId: string | null; ignored: boolean }>>(new Map());
   const [partners, setPartners] = useState<Partner[]>([]);
   const [previewRows, setPreviewRows] = useState<MessageRow[]>([]);
-  const [importResult, setImportResult] = useState<{ expenses: number; total: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ expenses: number; funds: number; total: number } | null>(null);
 
   // Load partners and existing sender mappings
   useEffect(() => {
@@ -90,6 +90,8 @@ export default function ImportWizard() {
         selected: false,
         amount: "",
         category: "",
+        isFund: false,
+        needsReview: true,
       };
     });
 
@@ -117,10 +119,12 @@ export default function ImportWizard() {
     }
 
     let totalAmount = 0;
+    let fundCount = 0;
 
     for (const row of selectedRows) {
       const amountEgp = parseFloat(row.amount) || 0;
       totalAmount += amountEgp;
+      if (row.isFund) fundCount++;
 
       await supabase.from("expenses").insert({
         project_id: activeProject.id,
@@ -131,8 +135,8 @@ export default function ImportWizard() {
         notes: row.displayText || null,
         receipt_urls: [],
         missing_receipt: true,
-        needs_review: true,
-        is_fund_transfer: false,
+        needs_review: row.needsReview,
+        is_fund_transfer: row.isFund,
         source: "whatsapp_import",
       });
     }
@@ -143,9 +147,9 @@ export default function ImportWizard() {
       receipts_unmatched: 0,
     }).eq("id", run.id);
 
-    setImportResult({ expenses: selectedRows.length, total: totalAmount });
+    setImportResult({ expenses: selectedRows.length - fundCount, funds: fundCount, total: totalAmount });
     setStep(4);
-    toast({ title: "Import complete", description: `${selectedRows.length} expenses imported.` });
+    toast({ title: "Import complete", description: `${selectedRows.length} items imported.` });
   }, [activeProject, toast]);
 
   if (!activeProject) return <p className="text-muted-foreground p-4">Select a project first.</p>;
@@ -191,10 +195,11 @@ export default function ImportWizard() {
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm">
-              Imported {importResult.expenses} expenses totaling {formatEGP(importResult.total)}.
+              Imported {importResult.expenses} expenses{importResult.funds > 0 ? ` and ${importResult.funds} fund transfers` : ""} totaling {formatEGP(importResult.total)}.
             </p>
             <p className="text-sm text-muted-foreground">
-              All marked as needs review and missing receipt. Add receipt photos from each expense's detail page.
+              Items marked for review appear with ⚠ badge in the expenses list.
+              Add receipt photos from each expense's detail page.
             </p>
             <div className="flex gap-2 pt-4">
               <Button variant="outline" onClick={() => navigate("/expenses")}>View Expenses</Button>
