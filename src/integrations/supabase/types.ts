@@ -66,10 +66,13 @@ export type Database = {
           date: string
           id: string
           missing_receipt: boolean
+          needs_review: boolean
           notes: string | null
           paid_by_partner_id: string
           project_id: string
+          receipt_confidence: string | null
           receipt_urls: string[] | null
+          source: string
           updated_at: string
         }
         Insert: {
@@ -79,10 +82,13 @@ export type Database = {
           date?: string
           id?: string
           missing_receipt?: boolean
+          needs_review?: boolean
           notes?: string | null
           paid_by_partner_id: string
           project_id: string
+          receipt_confidence?: string | null
           receipt_urls?: string[] | null
+          source?: string
           updated_at?: string
         }
         Update: {
@@ -92,10 +98,13 @@ export type Database = {
           date?: string
           id?: string
           missing_receipt?: boolean
+          needs_review?: boolean
           notes?: string | null
           paid_by_partner_id?: string
           project_id?: string
+          receipt_confidence?: string | null
           receipt_urls?: string[] | null
+          source?: string
           updated_at?: string
         }
         Relationships: [
