@@ -75,6 +75,7 @@ export default function AddExpense() {
       notes: notes || null,
       receipt_urls: urls,
       missing_receipt: missingReceipt,
+      source: "manual",
     });
 
     setSubmitting(false);

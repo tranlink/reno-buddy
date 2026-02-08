@@ -167,6 +167,9 @@ export default function ImportWizard() {
         notes: row.candidate.message.notes || row.candidate.message.text,
         receipt_urls: receiptUrls,
         missing_receipt: missingReceipt,
+        source: "whatsapp_import",
+        needs_review: row.candidate.needsReview,
+        receipt_confidence: row.receiptMatch?.confidence || null,
       }).select().single();
 
       // Store hash

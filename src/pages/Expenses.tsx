@@ -17,6 +17,7 @@ export default function Expenses() {
   const [filterMonth, setFilterMonth] = useState("__all__");
   const [filterPartner, setFilterPartner] = useState("__all__");
   const [filterCategory, setFilterCategory] = useState("__all__");
+  const [filterReview, setFilterReview] = useState("__all__");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,6 +43,8 @@ export default function Expenses() {
   if (filterMonth !== "__all__") filtered = filtered.filter((e) => e.date.startsWith(filterMonth));
   if (filterPartner !== "__all__") filtered = filtered.filter((e) => e.paid_by_partner_id === filterPartner);
   if (filterCategory !== "__all__") filtered = filtered.filter((e) => e.category === filterCategory);
+  if (filterReview === "review") filtered = filtered.filter((e) => (e as any).needs_review === true);
+  if (filterReview === "reviewed") filtered = filtered.filter((e) => (e as any).needs_review !== true);
 
   return (
     <div className="space-y-4">
@@ -70,6 +73,14 @@ export default function Expenses() {
             {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={filterReview} onValueChange={setFilterReview}>
+          <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue placeholder="Review" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All</SelectItem>
+            <SelectItem value="review">Needs Review</SelectItem>
+            <SelectItem value="reviewed">Reviewed</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -85,9 +96,14 @@ export default function Expenses() {
                   <p className="text-xs text-muted-foreground">{exp.date} · {partner?.name || "Unknown"}{exp.category ? ` · ${exp.category}` : ""}</p>
                   {exp.notes && <p className="text-xs text-muted-foreground truncate max-w-[200px]">{exp.notes}</p>}
                 </div>
-                <Badge variant={exp.missing_receipt ? "destructive" : "secondary"} className="text-xs shrink-0">
-                  {exp.missing_receipt ? "⚠️ Missing" : "✅ Receipt"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {(exp as any).needs_review && (
+                    <Badge variant="outline" className="text-yellow-600 border-yellow-600 text-xs">⚠ Review</Badge>
+                  )}
+                  <Badge variant={exp.missing_receipt ? "destructive" : "secondary"} className="text-xs shrink-0">
+                    {exp.missing_receipt ? "⚠️ Missing" : "✅ Receipt"}
+                  </Badge>
+                </div>
               </Link>
             );
           })}

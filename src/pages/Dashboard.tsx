@@ -39,6 +39,7 @@ export default function Dashboard() {
 
   const totalSpend = expenses.reduce((s, e) => s + Number(e.amount_egp), 0);
   const missingReceipts = expenses.filter((e) => e.missing_receipt).length;
+  const needsReviewCount = expenses.filter((e) => (e as any).needs_review).length;
   const lastExpenseDate = expenses.length > 0 ? expenses[0].date : null;
 
   // Partner contributions
@@ -90,8 +91,8 @@ export default function Dashboard() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><Calendar className="h-3.5 w-3.5" /> Last Expense</div>
-            <p className="text-lg font-bold">{lastExpenseDate || "—"}</p>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1"><AlertTriangle className="h-3.5 w-3.5" /> Needs Review</div>
+            <p className="text-lg font-bold">{needsReviewCount}</p>
           </CardContent>
         </Card>
       </div>
