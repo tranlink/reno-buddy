@@ -164,7 +164,7 @@ export default function ImportWizard() {
         amount_egp: row.amountEgp,
         paid_by_partner_id: row.mappedPartnerId!,
         category: row.category || null,
-        notes: row.candidate.message.text,
+        notes: row.candidate.message.notes || row.candidate.message.text,
         receipt_urls: receiptUrls,
         missing_receipt: missingReceipt,
       }).select().single();

@@ -1,7 +1,8 @@
 export interface ParsedMessage {
   timestamp: Date;
   sender: string;
-  text: string;
+  text: string;        // full message text (first line + continuations)
+  notes: string;       // continuation lines only (for storing as expense notes)
   isMedia: boolean;
   mediaType?: "image" | "video" | "audio" | "document";
   attachedFilename?: string; // from "<attached: filename.jpg>"
@@ -67,9 +68,9 @@ const MEDIA_OMITTED = /(image omitted|video omitted|audio omitted|sticker omitte
 const ATTACHED_FILE = /<attached:\s*(.+?)>/i;
 
 // Currency hints for expense detection
-const CURRENCY_HINTS = /(?:ج|جنيه|EGP|LE|egp|le)/i;
-// Arabic and English numbers with optional commas/dots
-const NUMBER_PATTERN = /[\d٠-٩][,،\d٠-٩]*\.?\d*/g;
+const CURRENCY_HINTS = /جنيه|جم|ج\.م|(?:^|[\s\d])ج(?:[\s\d.,]|$)|EGP|L\.?E\.?/i;
+// Arabic and English numbers with optional commas/dots, optional k suffix
+const NUMBER_PATTERN = /[\d٠-٩][,،\d٠-٩]*\.?\d*\s*[kK]?/g;
 
 // Total/summary keywords to exclude by default
 const TOTAL_KEYWORDS = /(?:اجمالي|اجمال|الحساب|المجموع|total|subtotal|grand total)/i;
@@ -82,6 +83,15 @@ function parseArabicNumber(str: string): number {
   }
   result = result.replace(/[,،]/g, "");
   return parseFloat(result) || 0;
+}
+
+function extractAmount(rawMatch: string): number {
+  const trimmed = rawMatch.trim();
+  const hasK = /[kK]$/.test(trimmed);
+  const numStr = trimmed.replace(/[kK]$/, '').trim();
+  let value = parseArabicNumber(numStr);
+  if (hasK) value *= 1000;
+  return value;
 }
 
 function parseTimestamp(dateStr: string, timeStr: string): Date | null {
@@ -114,6 +124,10 @@ function parseTimestamp(dateStr: string, timeStr: string): Date | null {
 }
 
 export function parseChat(text: string): { messages: ParsedMessage[]; mediaEvents: MediaEvent[] } {
+  // Strip BOM and Unicode direction marks that break regex matching
+  text = text.replace(/^\uFEFF/, '');
+  text = text.replace(/[\u200E\u200F\u202A-\u202E]/g, '');
+
   const lines = text.split("\n");
   const messages: ParsedMessage[] = [];
   const mediaEvents: MediaEvent[] = [];
@@ -123,6 +137,9 @@ export function parseChat(text: string): { messages: ParsedMessage[]; mediaEvent
     if (!current) return;
     const fullText = current.lines.join("\n").trim();
     if (!fullText) return;
+    const notesText = current.lines.length > 1
+      ? current.lines.slice(1).join("\n").trim()
+      : "";
 
     const isSystem = SYSTEM_PATTERNS.some((p) => p.test(fullText));
     if (isSystem) { current = null; return; }
@@ -161,6 +178,7 @@ export function parseChat(text: string): { messages: ParsedMessage[]; mediaEvent
       timestamp: current.timestamp,
       sender: current.sender,
       text: fullText,
+      notes: notesText,
       isMedia,
       mediaType,
       attachedFilename: attachedMatch?.[1],
@@ -203,29 +221,39 @@ export function detectExpenses(messages: ParsedMessage[]): ExpenseCandidate[] {
   const candidates: ExpenseCandidate[] = [];
 
   for (const msg of messages) {
+    // Skip pure media messages (no text content besides the omitted marker)
     if (msg.isMedia && !msg.text.replace(MEDIA_OMITTED, "").replace(ATTACHED_FILE, "").trim()) continue;
 
     const textToCheck = msg.text;
-    if (!CURRENCY_HINTS.test(textToCheck)) continue;
 
-    const numbers = textToCheck.match(NUMBER_PATTERN);
-    if (!numbers || numbers.length === 0) continue;
+    // Find all numbers in the message
+    const numberMatches = textToCheck.match(NUMBER_PATTERN);
+    if (!numberMatches || numberMatches.length === 0) continue;
 
-    const amounts = numbers.map(parseArabicNumber).filter((n) => n > 0);
-    if (amounts.length === 0) continue;
+    // Extract and filter amounts (ignore numbers < 10, they're quantities like "2 bags")
+    const allAmounts = numberMatches.map(extractAmount).filter((n) => n > 0);
+    const significantAmounts = allAmounts.filter((n) => n >= 10);
+    if (significantAmounts.length === 0) continue;
 
+    // Check for currency hint
+    const hasCurrency = CURRENCY_HINTS.test(textToCheck);
+
+    // Check for total/summary keywords
     const isTotalLine = TOTAL_KEYWORDS.test(textToCheck);
-    const needsReview = amounts.length > 1;
 
-    // Pick the largest amount as the likely expense amount
-    const amountEgp = Math.max(...amounts);
+    // Pick the largest significant amount as the primary expense amount
+    const amountEgp = Math.max(...significantAmounts);
+
+    // Determine review flags
+    const needsReview = significantAmounts.length > 1 || !hasCurrency;
 
     candidates.push({
       message: msg,
       amountEgp,
       needsReview,
       isTotalLine,
-      excluded: isTotalLine, // exclude totals by default
+      // Exclude if: total line, OR no currency hint (user can still manually include)
+      excluded: isTotalLine || !hasCurrency,
     });
   }
 
