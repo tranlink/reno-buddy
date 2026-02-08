@@ -1,45 +1,47 @@
 
 
-## Project Ownership Percentage on Dashboard
+## Add Search to Expenses Page
 
-Add a visual "Ownership" section to the Dashboard that shows each partner's percentage share of the project based on their total contribution (expenses paid + funds sent) relative to the total spend.
+Add a text search input at the top of the filters that searches across notes, category, partner name, and amount -- supporting both Arabic and English text.
 
-### What will be added
+### What will change
 
-A new **"Project Ownership"** card placed right after the Partner Contributions table. It will display:
+**File:** `src/pages/Expenses.tsx` only.
 
-- Each partner's name with their ownership percentage (e.g., "Ahmed — 45.2%")
-- A colored progress bar showing their share visually
-- Each partner gets a distinct color (using Tailwind palette: blue, green, amber, etc.)
-- A stacked horizontal bar at the top showing all partners' shares side by side for a quick visual comparison
-- The percentage is calculated as: `(totalContribution / totalSpend) * 100`
-- If totalSpend is 0, show "No expenses yet"
+1. Add a new `searchQuery` state (`useState("")`)
+2. Add a search `<Input>` field with a search icon above the existing filter dropdowns, with placeholder text "Search expenses... / بحث..."
+3. Apply the search filter after all existing filters:
+   - Lowercase both the query and the searchable fields for case-insensitive matching
+   - Search across: `notes`, `category`, partner `name` (looked up from partners array), and `amount_egp` (converted to string)
+   - Arabic text works naturally since JavaScript string `.includes()` handles Unicode
+4. Import `Input` from `@/components/ui/input` and `Search` icon from `lucide-react`
 
-### Layout
+### Search behavior
 
-```text
-+--------------------------------------------------+
-| Project Ownership                                 |
-|                                                   |
-| [========== stacked bar (all partners) =========] |
-|                                                   |
-| Ahmed        ███████████████░░░░░░  45.2%         |
-| Abd El Rahman ██████████░░░░░░░░░░  32.1%         |
-| Amr          █████░░░░░░░░░░░░░░░░  22.7%         |
-+--------------------------------------------------+
+- Filters as you type (no submit button needed)
+- Works with all existing dropdown filters (search is applied on top of them)
+- Matches partial words in any language
+- The input is full-width on mobile and constrained on desktop
+
+### Technical details
+
+The filtering logic addition after the existing filters (around line 50):
+
+```typescript
+if (searchQuery.trim()) {
+  const q = searchQuery.trim().toLowerCase();
+  filtered = filtered.filter((e) => {
+    const partner = partners.find((p) => p.id === e.paid_by_partner_id);
+    const searchable = [
+      e.notes,
+      e.category,
+      partner?.name,
+      String(e.amount_egp),
+    ].filter(Boolean).join(" ").toLowerCase();
+    return searchable.includes(q);
+  });
+}
 ```
 
-### Technical Details
+No database changes needed. JavaScript's native string methods handle Arabic/Unicode text correctly.
 
-**File changed:** `src/pages/Dashboard.tsx` only.
-
-1. Add a `Progress` component import from `@/components/ui/progress`
-2. Define a color array: `const PARTNER_COLORS = ["bg-blue-500", "bg-green-500", "bg-amber-500", "bg-purple-500"]`
-3. Use the existing `partnerStats` array which already has the `share` field calculated as `(totalContribution / totalSpend) * 100`
-4. Sort partners by share descending for display
-5. Render a new `<Card>` section with:
-   - A stacked horizontal bar (a flex row of colored `<div>` elements, each with `width: X%`)
-   - Below it, each partner as a row: name, a Radix progress bar with the partner's color, and the percentage number
-6. Place this card between the Partner Contributions table and the Fund Transfers section
-
-No database changes, no new files, no schema updates needed. This is a pure UI addition using data already computed.
