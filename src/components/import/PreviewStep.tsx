@@ -1,161 +1,150 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, FileCheck } from "lucide-react";
-import { CATEGORIES } from "@/lib/constants";
-import { formatEGP } from "@/lib/constants";
-import type { ExpenseCandidate, ReceiptMatch } from "@/lib/whatsappParser";
-import type { Tables } from "@/integrations/supabase/types";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, FileCheck, Camera } from "lucide-react";
+import { CATEGORIES, formatEGP } from "@/lib/constants";
+import { useIsMobile } from "@/hooks/use-mobile";
 
-type Partner = Tables<"partners">;
-
-interface PreviewRow {
-  candidate: ExpenseCandidate;
-  included: boolean;
-  amountEgp: number;
+export interface MessageRow {
+  id: number;
+  date: string;
+  time: string;
+  sender: string;
+  partnerName: string;
+  partnerId: string;
+  text: string;
+  hasMedia: boolean;
+  mediaFilename: string | null;
+  selected: boolean;
+  amount: string;
   category: string;
-  receiptMatch: ReceiptMatch | null;
-  isDuplicate: boolean;
-  mappedPartnerName: string;
-  mappedPartnerId: string | null;
+  hash: string;
 }
 
 interface PreviewStepProps {
-  candidates: ExpenseCandidate[];
-  receiptMatches: Map<number, ReceiptMatch | null>;
+  rows: MessageRow[];
+  onRowsChange: (rows: MessageRow[]) => void;
   duplicateHashes: Set<string>;
-  senderToPartner: Map<string, { partnerId: string | null; ignored: boolean }>;
-  partners: Partner[];
-  onImport: (rows: PreviewRow[]) => Promise<void>;
+  onImport: (rows: MessageRow[]) => Promise<void>;
   onBack: () => void;
 }
 
+type FilterTab = "all" | "photos" | "numbers";
+
+const HAS_DIGIT = /[\d٠-٩]/;
+
 export default function PreviewStep({
-  candidates, receiptMatches, duplicateHashes, senderToPartner, partners, onImport, onBack,
+  rows, onRowsChange, duplicateHashes, onImport, onBack,
 }: PreviewStepProps) {
   const [importing, setImporting] = useState(false);
+  const [filter, setFilter] = useState<FilterTab>("all");
+  const isMobile = useIsMobile();
 
-  const getPartnerName = (id: string | null) => partners.find((p) => p.id === id)?.name || "—";
-
-  const [rows, setRows] = useState<PreviewRow[]>(() =>
-    candidates.map((c, idx) => {
-      const mapping = senderToPartner.get(c.message.sender);
-      const isDuplicate = duplicateHashes.has(c.message.hash);
-      return {
-        candidate: c,
-        included: !c.excluded && !isDuplicate && !mapping?.ignored && !!mapping?.partnerId,
-        amountEgp: c.amountEgp,
-        category: c.category || "",
-        receiptMatch: receiptMatches.get(idx) || null,
-        isDuplicate,
-        mappedPartnerName: getPartnerName(mapping?.partnerId || null),
-        mappedPartnerId: mapping?.partnerId || null,
-      };
-    })
-  );
+  const filteredIndices = useMemo(() => {
+    return rows
+      .map((r, i) => i)
+      .filter((i) => {
+        const r = rows[i];
+        if (duplicateHashes.has(r.hash)) return false;
+        if (filter === "photos") return r.hasMedia;
+        if (filter === "numbers") return HAS_DIGIT.test(r.text);
+        return true;
+      });
+  }, [rows, filter, duplicateHashes]);
 
   const toggleRow = (idx: number) => {
-    setRows((prev) => prev.map((r, i) => i === idx ? { ...r, included: !r.included } : r));
+    const next = [...rows];
+    next[idx] = { ...next[idx], selected: !next[idx].selected };
+    onRowsChange(next);
   };
 
   const updateAmount = (idx: number, val: string) => {
-    const num = parseFloat(val) || 0;
-    setRows((prev) => prev.map((r, i) => i === idx ? { ...r, amountEgp: num } : r));
+    const next = [...rows];
+    next[idx] = { ...next[idx], amount: val };
+    onRowsChange(next);
   };
 
   const updateCategory = (idx: number, val: string) => {
-    setRows((prev) => prev.map((r, i) => i === idx ? { ...r, category: val === "__none__" ? "" : val } : r));
+    const next = [...rows];
+    next[idx] = { ...next[idx], category: val === "__none__" ? "" : val };
+    onRowsChange(next);
   };
 
-  const selectedCount = rows.filter((r) => r.included).length;
+  const toggleAllVisible = (checked: boolean) => {
+    const visibleSet = new Set(filteredIndices);
+    const next = rows.map((r, i) => visibleSet.has(i) ? { ...r, selected: checked } : r);
+    onRowsChange(next);
+  };
+
+  const selectedRows = rows.filter((r) => r.selected);
+  const selectedCount = selectedRows.length;
+  const selectedTotal = selectedRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const missingAmounts = selectedRows.filter((r) => !r.amount || parseFloat(r.amount) <= 0).length;
+  const allVisibleSelected = filteredIndices.length > 0 && filteredIndices.every((i) => rows[i].selected);
 
   const handleImport = async () => {
     setImporting(true);
-    await onImport(rows.filter((r) => r.included));
+    await onImport(selectedRows);
     setImporting(false);
   };
 
-  const receiptBadge = (match: ReceiptMatch | null, isDuplicate: boolean) => {
-    if (isDuplicate) return <Badge variant="secondary">Already imported</Badge>;
-    if (!match) return <Badge variant="outline" className="text-warning border-warning">Unmatched</Badge>;
-    if (match.confidence === "high") return <Badge className="bg-success text-success-foreground">Matched ✓</Badge>;
-    if (match.confidence === "medium") return <Badge variant="secondary">Medium</Badge>;
-    return <Badge variant="outline">Low</Badge>;
-  };
+  if (isMobile) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <FileCheck className="h-5 w-5" /> Preview & Select
+          </CardTitle>
+          <CardDescription>Select messages to import as expenses and enter amounts.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterTab)}>
+            <TabsList className="w-full">
+              <TabsTrigger value="all" className="flex-1">All</TabsTrigger>
+              <TabsTrigger value="photos" className="flex-1">📷 Photos</TabsTrigger>
+              <TabsTrigger value="numbers" className="flex-1">123</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileCheck className="h-5 w-5" /> Preview & Import
-        </CardTitle>
-        <CardDescription>
-          Review detected expenses. Edit amounts or categories, then import selected rows.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-3 text-sm py-2 mb-2">
-          <span>{rows.filter(r => r.included).length} of {rows.length} selected</span>
-          <span className="text-yellow-600">
-            {rows.filter(r => r.candidate.needsReview && !r.isDuplicate).length} need review
-          </span>
-          <span className="text-muted-foreground">
-            {rows.filter(r => r.isDuplicate).length} duplicates
-          </span>
-          <span className="font-medium">
-            Total: {formatEGP(rows.filter(r => r.included).reduce((s, r) => s + r.amountEgp, 0))}
-          </span>
-        </div>
-        <div className="overflow-auto max-h-[60vh]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={rows.filter(r => !r.isDuplicate).every(r => r.included)}
-                    onCheckedChange={(checked) => {
-                      setRows(prev => prev.map(r => r.isDuplicate ? r : { ...r, included: !!checked }));
-                    }}
-                  />
-                </TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Sender</TableHead>
-                <TableHead>Partner</TableHead>
-                <TableHead>Amount (EGP)</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Receipt</TableHead>
-                <TableHead className="max-w-[200px]">Message</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row, idx) => (
-                <TableRow key={idx} className={row.isDuplicate ? "opacity-50" : ""}>
-                  <TableCell>
-                    <Checkbox
-                      checked={row.included}
-                      onCheckedChange={() => toggleRow(idx)}
-                      disabled={row.isDuplicate}
-                    />
-                  </TableCell>
-                  <TableCell className="text-xs whitespace-nowrap">
-                    {row.candidate.message.timestamp.toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-xs">{row.candidate.message.sender}</TableCell>
-                  <TableCell className="text-xs">{row.mappedPartnerName}</TableCell>
-                  <TableCell>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{filteredIndices.length} messages</span>
+            <span>{selectedCount} selected · {formatEGP(selectedTotal)}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox checked={allVisibleSelected} onCheckedChange={(c) => toggleAllVisible(!!c)} />
+            <span className="text-xs">Select all visible</span>
+          </div>
+
+          {missingAmounts > 0 && (
+            <p className="text-xs text-destructive">{missingAmounts} selected expenses are missing amounts</p>
+          )}
+
+          <div className="space-y-2 max-h-[55vh] overflow-auto">
+            {filteredIndices.map((idx) => {
+              const row = rows[idx];
+              return (
+                <div key={idx} className={`border rounded-lg p-3 space-y-2 ${row.selected ? "border-primary bg-primary/5" : "border-border"}`}>
+                  <div className="flex items-center gap-2">
+                    <Checkbox checked={row.selected} onCheckedChange={() => toggleRow(idx)} />
+                    <span className="text-xs text-muted-foreground">{row.date}</span>
+                    <span className="text-xs font-medium">{row.partnerName}</span>
+                    {row.hasMedia && <Camera className="h-3 w-3 text-muted-foreground" />}
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{row.text}</p>
+                  <div className="flex gap-2">
                     <Input
                       type="number"
-                      value={row.amountEgp}
+                      placeholder="Amount"
+                      value={row.amount}
                       onChange={(e) => updateAmount(idx, e.target.value)}
-                      className="w-24 h-8 text-xs"
+                      className={`flex-1 h-8 text-xs ${row.selected && (!row.amount || parseFloat(row.amount) <= 0) ? "border-destructive" : ""}`}
                     />
-                  </TableCell>
-                  <TableCell>
                     <Select value={row.category || "__none__"} onValueChange={(v) => updateCategory(idx, v)}>
                       <SelectTrigger className="w-28 h-8 text-xs">
                         <SelectValue placeholder="—" />
@@ -167,15 +156,104 @@ export default function PreviewStep({
                         ))}
                       </SelectContent>
                     </Select>
-                  </TableCell>
-                  <TableCell>{receiptBadge(row.receiptMatch, row.isDuplicate)}</TableCell>
-                  <TableCell className={`max-w-[200px] text-xs truncate ${row.candidate.isTotalLine ? "opacity-40" : ""}`} title={row.candidate.message.text}>
-                    {row.candidate.message.text.slice(0, 80)}
-                    {row.candidate.needsReview && <Badge variant="outline" className="ml-1 text-warning border-warning">Review</Badge>}
-                    {row.candidate.isTotalLine && <Badge variant="outline" className="ml-1">Total</Badge>}
-                  </TableCell>
-                </TableRow>
-              ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="outline" onClick={onBack} size="sm">Back</Button>
+            <Button onClick={handleImport} disabled={importing || selectedCount === 0 || missingAmounts > 0} size="sm">
+              {importing ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Importing...</> : `Import ${selectedCount}`}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileCheck className="h-5 w-5" /> Preview & Select
+        </CardTitle>
+        <CardDescription>Select messages to import as expenses and enter amounts.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-center gap-4 mb-3">
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterTab)}>
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="photos">📷 With Photos</TabsTrigger>
+              <TabsTrigger value="numbers">With Numbers</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <span className="text-sm text-muted-foreground">Showing {filteredIndices.length} messages</span>
+          <span className="text-sm font-medium">{selectedCount} selected · {formatEGP(selectedTotal)}</span>
+        </div>
+
+        {missingAmounts > 0 && (
+          <p className="text-sm text-destructive mb-2">{missingAmounts} selected expenses are missing amounts</p>
+        )}
+
+        <div className="overflow-auto max-h-[60vh]">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox checked={allVisibleSelected} onCheckedChange={(c) => toggleAllVisible(!!c)} />
+                </TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Sender</TableHead>
+                <TableHead className="max-w-[280px]">Message</TableHead>
+                <TableHead className="w-10">📷</TableHead>
+                <TableHead>Amount (EGP)</TableHead>
+                <TableHead>Category</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredIndices.map((idx) => {
+                const row = rows[idx];
+                return (
+                  <TableRow key={idx} className={row.selected ? "bg-primary/5" : ""}>
+                    <TableCell>
+                      <Checkbox checked={row.selected} onCheckedChange={() => toggleRow(idx)} />
+                    </TableCell>
+                    <TableCell className="text-xs whitespace-nowrap">{row.date}</TableCell>
+                    <TableCell className="text-xs">{row.partnerName}</TableCell>
+                    <TableCell className="max-w-[280px] text-xs truncate" title={row.text}>
+                      {row.text.slice(0, 100)}
+                    </TableCell>
+                    <TableCell>
+                      {row.hasMedia && <Camera className="h-4 w-4 text-muted-foreground" />}
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={row.amount}
+                        onChange={(e) => updateAmount(idx, e.target.value)}
+                        className={`w-24 h-8 text-xs ${row.selected && (!row.amount || parseFloat(row.amount) <= 0) ? "border-destructive" : ""}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Select value={row.category || "__none__"} onValueChange={(v) => updateCategory(idx, v)}>
+                        <SelectTrigger className="w-28 h-8 text-xs">
+                          <SelectValue placeholder="—" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">—</SelectItem>
+                          {CATEGORIES.map((c) => (
+                            <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -184,7 +262,7 @@ export default function PreviewStep({
           <Button variant="outline" onClick={onBack}>Back</Button>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">{selectedCount} selected</span>
-            <Button onClick={handleImport} disabled={importing || selectedCount === 0}>
+            <Button onClick={handleImport} disabled={importing || selectedCount === 0 || missingAmounts > 0}>
               {importing ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Importing...</> : `Import ${selectedCount} expenses`}
             </Button>
           </div>
@@ -193,5 +271,3 @@ export default function PreviewStep({
     </Card>
   );
 }
-
-export type { PreviewRow };
