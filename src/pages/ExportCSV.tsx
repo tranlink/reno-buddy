@@ -27,18 +27,16 @@ export default function ExportCSV() {
     const partners: Partner[] = partRes.data || [];
     const partnerMap = Object.fromEntries(partners.map((p) => [p.id, p.name]));
 
-    const header = "project_name,date,amount_egp,paid_by,category,notes,receipt_count,missing_receipt,created_at";
+    const header = "Date,Amount (EGP),Paid By,Category,Notes,Has Receipt,Source";
     const rows = expenses.map((e) => {
       const cols = [
-        `"${activeProject.name}"`,
         e.date,
         e.amount_egp,
         `"${partnerMap[e.paid_by_partner_id] || "Unknown"}"`,
         `"${e.category || ""}"`,
         `"${(e.notes || "").replace(/"/g, '""')}"`,
-        (e.receipt_urls || []).length,
-        e.missing_receipt,
-        e.created_at,
+        e.missing_receipt ? "No" : "Yes",
+        (e as any).source || "manual",
       ];
       return cols.join(",");
     });
@@ -66,7 +64,7 @@ export default function ExportCSV() {
           Export all expenses for <strong>{activeProject.name}</strong> as a CSV file.
         </p>
         <p className="text-xs text-muted-foreground">
-          Columns: project_name, date, amount_egp, paid_by, category, notes, receipt_count, missing_receipt, created_at
+          Columns: Date, Amount (EGP), Paid By, Category, Notes, Has Receipt, Source
         </p>
         <Button onClick={handleExport} disabled={exporting}>
           <Download className="mr-2 h-4 w-4" />
