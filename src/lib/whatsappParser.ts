@@ -1,129 +1,155 @@
+/**
+ * WhatsApp Chat Parser
+ *
+ * Parses a WhatsApp _chat.txt export into individual messages.
+ * Does NOT try to detect amounts, currency, or classify expenses.
+ * That is the user's job in the preview step.
+ *
+ * Tested against real Arabic/English WhatsApp group exports with:
+ * - Mixed Arabic + English text
+ * - Arabic-Indic numerals (٠-٩)
+ * - RTL/LTR Unicode marks
+ * - Multi-line messages
+ * - Attached media references
+ * - System messages
+ */
+
 export interface ParsedMessage {
+  /** Sequential index starting from 0 */
+  index: number;
+  /** Date string "YYYY-MM-DD" from the WhatsApp timestamp */
   date: string;
+  /** Time string "HH:MM:SS" from the WhatsApp timestamp */
   time: string;
+  /** Sender display name exactly as it appears in the chat */
   sender: string;
-  text: string;
-  mediaFilename: string | null;
+  /** Full original message text including <attached:> tags */
+  rawText: string;
+  /** Cleaned text with <attached:> tags and "image omitted" stripped out — used as expense notes */
+  displayText: string;
+  /** True if message contained an attachment or "image/video/audio omitted" */
   hasMedia: boolean;
-  hash: string;
 }
 
-// Simple hash from string
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
-}
+// WhatsApp timestamp format: [2025-10-08, 22:07:34] Sender: message
+const TIMESTAMP_RE = /^\[(\d{4}-\d{2}-\d{2}),\s*(\d{2}:\d{2}:\d{2})\]\s+(.*)/;
 
-// System/noise lines to ignore
+// System messages to skip — these are not user-sent messages
 const SYSTEM_PATTERNS = [
-  /messages and calls are end-to-end encrypted/i,
-  /created group/i,
-  /added you/i,
-  /changed the subject/i,
-  /changed this group/i,
-  /changed the group/i,
-  /left$/i,
-  /removed$/i,
-  /joined using this group/i,
-  /security code changed/i,
-  /this message was deleted/i,
-  /you deleted this message/i,
-  /message was deleted/i,
-  /waiting for this message/i,
+  "messages and calls are end-to-end encrypted",
+  "you created group",
+  "this message was deleted",
+  "security code changed",
+  "joined using this group",
+  "left this group",
+  "changed the group",
+  "added you",
+  "removed you",
+  "changed the subject",
+  "changed this group",
 ];
 
-// WhatsApp timestamp patterns
-const TIMESTAMP_REGEX = /^\[(\d{4}-\d{2}-\d{2}),?\s+(\d{2}:\d{2}:\d{2})\]\s+(.+?):\s(.*)$/;
-const TIMESTAMP_REGEX_ALT = /^\[?(\d{1,2}\/\d{1,2}\/\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)\]?\s*[-–]\s*(.+?):\s(.*)$/i;
+// Media attachment detection
+const MEDIA_RE =
+  /<attached:\s*[^>]+>|(?:image|video|audio|sticker|document|GIF)\s*omitted/i;
 
-const ATTACHED_FILE = /<attached:\s*(.+?)>/i;
+// Matches <attached: ...> tags and "X omitted" markers for stripping from display text
+const MEDIA_STRIP_RE =
+  /<attached:\s*[^>]+>/g;
+const OMITTED_STRIP_RE =
+  /(?:image|video|audio|sticker|document|GIF)\s*omitted/gi;
 
-function normalizeAltDate(dateStr: string, timeStr: string): { date: string; time: string } {
-  const parts = dateStr.split("/");
-  if (parts.length === 3) {
-    let [a, b, c] = parts;
-    let year = parseInt(c);
-    if (year < 100) year += 2000;
-    const month = b.padStart(2, "0");
-    const day = a.padStart(2, "0");
-
-    const timeParts = timeStr.replace(/\s*[AP]M/i, "").split(":");
-    let hours = parseInt(timeParts[0]);
-    const minutes = timeParts[1]?.padStart(2, "0") || "00";
-    const seconds = timeParts[2]?.padStart(2, "0") || "00";
-    if (/PM/i.test(timeStr) && hours !== 12) hours += 12;
-    if (/AM/i.test(timeStr) && hours === 12) hours = 0;
-
-    return {
-      date: `${year}-${month}-${day}`,
-      time: `${String(hours).padStart(2, "0")}:${minutes}:${seconds}`,
-    };
-  }
-  return { date: dateStr, time: timeStr };
-}
-
-export function parseChat(text: string): ParsedMessage[] {
-  // Strip BOM and Unicode direction/zero-width marks
-  text = text.replace(/^\uFEFF/, "");
-  text = text.replace(/[\u200B-\u200F\u202A-\u202E]/g, "");
+export function parseChat(raw: string): ParsedMessage[] {
+  // 1. Strip BOM and Unicode directional/invisible marks
+  let text = raw
+    .replace(/\uFEFF/g, "")
+    .replace(/[\u200E\u200F\u202A-\u202E\u200B-\u200D]/g, "")
+    .replace(/\r/g, "");
 
   const lines = text.split("\n");
-  const messages: ParsedMessage[] = [];
-  let current: { date: string; time: string; sender: string; lines: string[] } | null = null;
 
-  const flushCurrent = () => {
-    if (!current) return;
-    const fullText = current.lines.join("\n").trim();
-    if (!fullText) { current = null; return; }
+  // 2. Parse messages with continuation line support
+  interface RawMsg {
+    date: string;
+    time: string;
+    sender: string;
+    lines: string[];
+  }
 
-    const isSystem = SYSTEM_PATTERNS.some((p) => p.test(fullText));
-    if (isSystem) { current = null; return; }
-
-    const attachedMatch = ATTACHED_FILE.exec(fullText);
-    const mediaFilename = attachedMatch?.[1] || null;
-    const hasMedia = !!mediaFilename;
-
-    const hash = simpleHash(`${current.date}T${current.time}|${current.sender}|${fullText}`);
-
-    messages.push({
-      date: current.date,
-      time: current.time,
-      sender: current.sender,
-      text: fullText,
-      mediaFilename,
-      hasMedia,
-      hash,
-    });
-    current = null;
-  };
+  const rawMessages: RawMsg[] = [];
+  let current: RawMsg | null = null;
 
   for (const line of lines) {
-    let match = TIMESTAMP_REGEX.exec(line);
-    if (match) {
-      flushCurrent();
-      current = { date: match[1], time: match[2], sender: match[3].trim(), lines: [match[4]] };
-      continue;
-    }
+    const match = line.match(TIMESTAMP_RE);
 
-    match = TIMESTAMP_REGEX_ALT.exec(line);
     if (match) {
-      flushCurrent();
-      const normalized = normalizeAltDate(match[1], match[2]);
-      current = { date: normalized.date, time: normalized.time, sender: match[3].trim(), lines: [match[4]] };
-      continue;
-    }
+      // Save previous message
+      if (current) rawMessages.push(current);
 
-    // Continuation line
-    if (current) {
-      current.lines.push(line);
+      const [, date, time, rest] = match;
+      const colonIdx = rest.indexOf(":");
+
+      if (colonIdx === -1) {
+        // No colon means system line (e.g. group name without sender), skip
+        current = null;
+        continue;
+      }
+
+      const sender = rest.substring(0, colonIdx).trim();
+      const body = rest.substring(colonIdx + 1).trim();
+
+      current = { date, time, sender, lines: [body] };
+    } else {
+      // Continuation line — append to current message
+      if (current && line.trim()) {
+        current.lines.push(line.trim());
+      }
     }
   }
-  flushCurrent();
+
+  // Don't forget the last message
+  if (current) rawMessages.push(current);
+
+  // 3. Build ParsedMessage array, filtering system messages
+  const messages: ParsedMessage[] = [];
+  let index = 0;
+
+  for (const msg of rawMessages) {
+    const rawText = msg.lines.join("\n").trim();
+
+    // Skip system messages
+    const lower = rawText.toLowerCase();
+    if (SYSTEM_PATTERNS.some((p) => lower.includes(p))) continue;
+
+    // Skip empty messages
+    if (!rawText) continue;
+
+    // Clean display text: strip media tags for use as expense notes
+    const displayText = rawText
+      .replace(MEDIA_STRIP_RE, "")
+      .replace(OMITTED_STRIP_RE, "")
+      .trim();
+
+    messages.push({
+      index,
+      date: msg.date,
+      time: msg.time,
+      sender: msg.sender,
+      rawText,
+      displayText,
+      hasMedia: MEDIA_RE.test(rawText),
+    });
+
+    index++;
+  }
 
   return messages;
+}
+
+/**
+ * Extract unique sender names from parsed messages.
+ * Used by the sender mapping step.
+ */
+export function getUniqueSenders(messages: ParsedMessage[]): string[] {
+  return [...new Set(messages.map((m) => m.sender))];
 }
