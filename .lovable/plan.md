@@ -1,37 +1,43 @@
 
 
-## Delete Empty Duplicate Projects
+## Add Dark Mode Toggle
 
-### Current state
+### What will change
 
-| Project | Created | Expenses | Action |
-|---------|---------|----------|--------|
-| Mountain Cave Retreat (df7eb9e4) | First | 191 | KEEP |
-| Mountain Cave Retreat (11b9ba95) | Second | 0 | DELETE |
-| Mountain Cave Retreat (e4d61915) | Third | 0 | DELETE |
+**1. Create a ThemeProvider wrapper** (`src/components/ThemeProvider.tsx`)
+- Wrap the app with `next-themes`'s `ThemeProvider` so the `.dark` class gets applied to `<html>`
+- Set default theme to "system" and storage key to "reno-theme"
 
-### What will happen
+**2. Update `src/App.tsx`**
+- Wrap the app content with the new `ThemeProvider`
 
-**1. Database cleanup** -- Delete the two empty duplicate projects and their related (also empty) data using the data modification tool:
+**3. Add a theme toggle button in the header** (`src/components/AppLayout.tsx`)
+- Add a Sun/Moon icon button next to the project selector in the header
+- Clicking it cycles between light and dark mode
+- Uses `useTheme()` from `next-themes`
 
-```sql
--- Delete the two empty projects (cascading will clean up any related rows)
-DELETE FROM partners WHERE project_id IN ('11b9ba95-3ae9-4f4f-913a-fd6e64eab7a0', 'e4d61915-fb2b-4fe2-8489-c0b8caecb346');
-DELETE FROM projects WHERE id IN ('11b9ba95-3ae9-4f4f-913a-fd6e64eab7a0', 'e4d61915-fb2b-4fe2-8489-c0b8caecb346');
+### Why this works out of the box
+- Dark mode CSS variables are already fully defined in `src/index.css` (the `.dark` class block)
+- `next-themes` is already installed as a dependency
+- All UI components already use CSS variables (`hsl(var(--background))`, etc.), so they will adapt automatically
+
+### Technical details
+
+**ThemeProvider.tsx:**
+```tsx
+import { ThemeProvider as NextThemesProvider } from "next-themes";
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <NextThemesProvider attribute="class" defaultTheme="system" enableSystem>
+      {children}
+    </NextThemesProvider>
+  );
+}
 ```
 
-**2. Add delete feature to Project Settings** (`src/pages/ProjectSettings.tsx`) for future use:
-- Add a "Danger Zone" card at the bottom of settings
-- "Delete Project" button opens a confirmation dialog
-- User must type the exact project name to confirm
-- Cannot delete the last remaining project
-- After deletion, switches to the next available project
+**AppLayout.tsx header addition:**
+- Import `Moon`, `Sun` from `lucide-react`
+- Import `useTheme` from `next-themes`
+- Add a button that toggles between light/dark before the project selector
 
-**3. Database migration** -- Add cascading foreign keys so future project deletions automatically clean up related data:
-- `partners`, `expenses`, `audit_log`, `import_runs`, `import_message_hashes`, `receipt_inbox`, `sender_mappings` will all get `ON DELETE CASCADE` constraints on their `project_id` column
-
-### Safety guarantees
-- Your project with 191 expenses is untouched
-- Only the two projects with zero expenses are removed
-- The delete UI feature requires typing the exact project name to confirm
-- Last project can never be deleted
