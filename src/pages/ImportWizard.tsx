@@ -3,7 +3,6 @@ import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { parseChat } from "@/lib/whatsappParser";
 import type { ParsedMessage } from "@/lib/whatsappParser";
 import type { Tables } from "@/integrations/supabase/types";
 import UploadStep from "@/components/import/UploadStep";
@@ -12,6 +11,7 @@ import PreviewStep, { type MessageRow } from "@/components/import/PreviewStep";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatEGP } from "@/lib/constants";
 
 type Partner = Tables<"partners">;
 
@@ -21,15 +21,13 @@ export default function ImportWizard() {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
-  const [mediaFiles, setMediaFiles] = useState<Map<string, File>>(new Map());
   const [messages, setMessages] = useState<ParsedMessage[]>([]);
   const [senders, setSenders] = useState<string[]>([]);
   const [senderMapping, setSenderMapping] = useState<Map<string, { partnerId: string | null; ignored: boolean }>>(new Map());
   const [existingMappings, setExistingMappings] = useState<Map<string, { partnerId: string | null; ignored: boolean }>>(new Map());
   const [partners, setPartners] = useState<Partner[]>([]);
   const [previewRows, setPreviewRows] = useState<MessageRow[]>([]);
-  const [duplicateHashes, setDuplicateHashes] = useState<Set<string>>(new Set());
-  const [importResult, setImportResult] = useState<{ expenses: number; receipts: number; inbox: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ expenses: number; total: number } | null>(null);
 
   // Load partners and existing sender mappings
   useEffect(() => {
@@ -48,11 +46,8 @@ export default function ImportWizard() {
   }, [activeProject]);
 
   // Step 1 complete
-  const handleUploadComplete = useCallback((text: string, files: Map<string, File>) => {
-    setMediaFiles(files);
-    const parsed = parseChat(text);
+  const handleUploadComplete = useCallback((parsed: ParsedMessage[], uniqueSenders: string[]) => {
     setMessages(parsed);
-    const uniqueSenders = [...new Set(parsed.map((m) => m.sender))];
     setSenders(uniqueSenders);
     setStep(2);
   }, []);
@@ -90,28 +85,13 @@ export default function ImportWizard() {
         sender: m.sender,
         partnerName: getPartnerName(map.partnerId),
         partnerId: map.partnerId!,
-        text: m.text,
+        displayText: m.displayText,
         hasMedia: m.hasMedia,
-        mediaFilename: m.mediaFilename,
         selected: false,
         amount: "",
         category: "",
-        hash: m.hash,
       };
     });
-
-    // Check duplicates
-    const hashes = rows.map((r) => r.hash);
-    if (hashes.length > 0) {
-      const { data: existing } = await supabase
-        .from("import_message_hashes")
-        .select("message_hash")
-        .eq("project_id", activeProject.id)
-        .in("message_hash", hashes);
-      setDuplicateHashes(new Set((existing || []).map((e) => e.message_hash)));
-    } else {
-      setDuplicateHashes(new Set());
-    }
 
     setPreviewRows(rows);
     setStep(3);
@@ -126,7 +106,7 @@ export default function ImportWizard() {
       .insert({
         project_id: activeProject.id,
         user_id: (await supabase.auth.getUser()).data.user!.id,
-        filename: "WhatsApp Export",
+        filename: "WhatsApp Chat Import",
       })
       .select()
       .single();
@@ -136,73 +116,37 @@ export default function ImportWizard() {
       return;
     }
 
-    let receiptsLinked = 0;
+    let totalAmount = 0;
 
     for (const row of selectedRows) {
       const amountEgp = parseFloat(row.amount) || 0;
+      totalAmount += amountEgp;
 
-      const { data: expense } = await supabase.from("expenses").insert({
+      await supabase.from("expenses").insert({
         project_id: activeProject.id,
         date: row.date,
         amount_egp: amountEgp,
         paid_by_partner_id: row.partnerId,
         category: row.category || null,
-        notes: row.text,
+        notes: row.displayText || null,
         receipt_urls: [],
-        missing_receipt: !row.hasMedia,
+        missing_receipt: true,
         needs_review: true,
         is_fund_transfer: false,
         source: "whatsapp_import",
-      }).select().single();
-
-      if (expense) {
-        await supabase.from("import_message_hashes").insert({
-          project_id: activeProject.id,
-          message_hash: row.hash,
-          expense_id: expense.id,
-          import_run_id: run.id,
-        });
-        if (row.hasMedia) receiptsLinked++;
-      }
-    }
-
-    // Send ALL media files from ZIP to receipt inbox
-    const imageFiles = Array.from(mediaFiles.entries()).filter(
-      ([fn]) => /\.(jpg|jpeg|png|webp)$/i.test(fn)
-    );
-
-    for (const [fn, file] of imageFiles) {
-      const path = `${activeProject.id}/inbox/${crypto.randomUUID()}-${fn}`;
-      const { error: upErr } = await supabase.storage.from("receipts").upload(path, file);
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(path);
-        // Find the message that referenced this file for metadata
-        const relatedMsg = messages.find((m) => m.mediaFilename === fn);
-        await supabase.from("receipt_inbox").insert({
-          project_id: activeProject.id,
-          import_run_id: run.id,
-          storage_path: urlData.publicUrl,
-          original_filename: fn,
-          whatsapp_sender: relatedMsg?.sender || null,
-          timestamp: relatedMsg ? `${relatedMsg.date}T${relatedMsg.time}` : null,
-        });
-      }
+      });
     }
 
     await supabase.from("import_runs").update({
       expenses_imported: selectedRows.length,
       receipts_matched: 0,
-      receipts_unmatched: imageFiles.length,
+      receipts_unmatched: 0,
     }).eq("id", run.id);
 
-    setImportResult({
-      expenses: selectedRows.length,
-      receipts: receiptsLinked,
-      inbox: imageFiles.length,
-    });
+    setImportResult({ expenses: selectedRows.length, total: totalAmount });
     setStep(4);
     toast({ title: "Import complete", description: `${selectedRows.length} expenses imported.` });
-  }, [activeProject, mediaFiles, messages, toast]);
+  }, [activeProject, toast]);
 
   if (!activeProject) return <p className="text-muted-foreground p-4">Select a project first.</p>;
 
@@ -212,7 +156,7 @@ export default function ImportWizard() {
 
       {/* Step indicators */}
       <div className="flex gap-2 text-sm">
-        {["Upload ZIP", "Map Senders", "Preview", "Done"].map((label, i) => (
+        {["Upload", "Map Senders", "Preview", "Done"].map((label, i) => (
           <div key={i} className={`px-3 py-1 rounded-full text-xs font-medium ${
             step === i + 1 ? "bg-primary text-primary-foreground" :
             step > i + 1 ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
@@ -234,7 +178,6 @@ export default function ImportWizard() {
         <PreviewStep
           rows={previewRows}
           onRowsChange={setPreviewRows}
-          duplicateHashes={duplicateHashes}
           onImport={handleImport}
           onBack={() => setStep(2)}
         />
@@ -242,20 +185,20 @@ export default function ImportWizard() {
       {step === 4 && importResult && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-success">
+            <CardTitle className="flex items-center gap-2 text-green-600">
               <CheckCircle2 className="h-5 w-5" /> Import Complete
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <p className="text-sm">{importResult.expenses} expenses imported</p>
-            {importResult.inbox > 0 && (
-              <p className="text-sm">{importResult.inbox} photos sent to receipt inbox for manual assignment</p>
-            )}
+            <p className="text-sm">
+              Imported {importResult.expenses} expenses totaling {formatEGP(importResult.total)}.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              All marked as needs review and missing receipt. Add receipt photos from each expense's detail page.
+            </p>
             <div className="flex gap-2 pt-4">
-              <Button variant="outline" onClick={() => navigate("/receipt-inbox")}>
-                Go to Receipt Inbox
-              </Button>
-              <Button onClick={() => navigate("/expenses")}>View Expenses</Button>
+              <Button variant="outline" onClick={() => navigate("/expenses")}>View Expenses</Button>
+              <Button onClick={() => { setStep(1); setImportResult(null); }}>Import Another</Button>
             </div>
           </CardContent>
         </Card>

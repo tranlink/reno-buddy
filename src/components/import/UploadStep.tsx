@@ -1,64 +1,47 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, FileArchive, Loader2 } from "lucide-react";
-import JSZip from "jszip";
+import { Upload, FileText, Loader2 } from "lucide-react";
+import { parseChat, getUniqueSenders } from "@/lib/whatsappParser";
+import type { ParsedMessage } from "@/lib/whatsappParser";
 
 interface UploadStepProps {
-  onComplete: (chatText: string, mediaFiles: Map<string, File>) => void;
+  onComplete: (messages: ParsedMessage[], senders: string[]) => void;
 }
 
 export default function UploadStep({ onComplete }: UploadStepProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [summary, setSummary] = useState<{ messages: number; senders: number } | null>(null);
 
-  const processZip = useCallback(async (file: File) => {
+  const processFile = useCallback(async (file: File) => {
     setLoading(true);
     setError(null);
+    setSummary(null);
     try {
-      const zip = await JSZip.loadAsync(file);
-      let chatText = "";
-      const mediaFiles = new Map<string, File>();
-
-      for (const [filename, zipEntry] of Object.entries(zip.files)) {
-        if (zipEntry.dir) continue;
-        const basename = filename.split("/").pop() || filename;
-
-        if (basename === "_chat.txt" || basename.endsWith("_chat.txt") || basename.includes("chat") && basename.endsWith(".txt")) {
-          chatText = await zipEntry.async("text");
-        } else if (/\.(jpg|jpeg|png|webp|gif|mp4|mov|mp3|ogg|opus|wav|m4a|pdf)$/i.test(basename)) {
-          const blob = await zipEntry.async("blob");
-          const ext = basename.split(".").pop()?.toLowerCase() || "";
-          const mimeMap: Record<string, string> = {
-            jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
-            gif: "image/gif", mp4: "video/mp4", mov: "video/quicktime",
-            mp3: "audio/mpeg", ogg: "audio/ogg", opus: "audio/opus", wav: "audio/wav",
-            m4a: "audio/mp4", pdf: "application/pdf",
-          };
-          mediaFiles.set(basename, new File([blob], basename, { type: mimeMap[ext] || "application/octet-stream" }));
-        }
-      }
-
-      if (!chatText) {
-        setError("No chat text file found in the ZIP. Expected _chat.txt.");
+      const text = await file.text();
+      const parsed = parseChat(text);
+      if (parsed.length === 0) {
+        setError("No messages found. Make sure this is a WhatsApp _chat.txt export.");
         setLoading(false);
         return;
       }
-
-      onComplete(chatText, mediaFiles);
-    } catch (e) {
-      setError("Failed to read ZIP file. Make sure it's a valid WhatsApp export.");
+      const senders = getUniqueSenders(parsed);
+      setSummary({ messages: parsed.length, senders: senders.length });
+      onComplete(parsed, senders);
+    } catch {
+      setError("Failed to read file. Make sure it's a valid WhatsApp chat export.");
     }
     setLoading(false);
   }, [onComplete]);
 
   const handleFile = (file: File) => {
-    if (!file.name.endsWith(".zip")) {
-      setError("Please upload a ZIP file.");
+    if (!file.name.endsWith(".txt")) {
+      setError("Please upload a .txt file.");
       return;
     }
-    processZip(file);
+    processFile(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -71,10 +54,11 @@ export default function UploadStep({ onComplete }: UploadStepProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileArchive className="h-5 w-5" /> Upload WhatsApp Export
+          <FileText className="h-5 w-5" /> Upload WhatsApp _chat.txt file
         </CardTitle>
         <CardDescription>
-          Export your WhatsApp group chat (with media) and upload the ZIP file here.
+          Export your WhatsApp group chat (without media) and upload the _chat.txt file.
+          You'll add receipt photos later from each expense's detail page.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -89,20 +73,20 @@ export default function UploadStep({ onComplete }: UploadStepProps) {
           {loading ? (
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">Extracting ZIP file...</p>
+              <p className="text-sm text-muted-foreground">Parsing chat file...</p>
             </div>
           ) : (
             <>
               <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground mb-3">
-                Drag & drop your WhatsApp export ZIP here, or click to browse
+                Drag & drop your _chat.txt file here, or click to browse
               </p>
               <Button variant="outline" asChild>
                 <label className="cursor-pointer">
                   Browse files
                   <input
                     type="file"
-                    accept=".zip"
+                    accept=".txt,text/plain"
                     className="hidden"
                     onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
                   />
@@ -112,6 +96,11 @@ export default function UploadStep({ onComplete }: UploadStepProps) {
           )}
         </div>
         {error && <p className="text-sm text-destructive mt-3">{error}</p>}
+        {summary && (
+          <p className="text-sm text-muted-foreground mt-3">
+            Found {summary.messages} messages from {summary.senders} senders
+          </p>
+        )}
       </CardContent>
     </Card>
   );
